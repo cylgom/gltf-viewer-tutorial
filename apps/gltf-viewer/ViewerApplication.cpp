@@ -21,6 +21,26 @@ void keyCallback(
   }
 }
 
+bool ViewerApplication::loadGltfFile(tinygltf::Model & model)
+{
+	std::string err;
+	std::string warn;
+
+	bool ret = m_gltfLoader.LoadASCIIFromFile(&model, &err, &warn, m_gltfFilePath.string());
+
+	if (!err.empty())
+	{
+		std::cerr << "Error: " << err << std::endl;
+	}
+
+	if (!warn.empty())
+	{
+		std::cerr << "Warning: " << warn << std::endl;
+	}
+
+	return ret;
+}
+
 int ViewerApplication::run()
 {
   // Loader shaders
@@ -54,8 +74,14 @@ int ViewerApplication::run()
         Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
   }
 
-  tinygltf::Model model;
   // TODO Loading the glTF file
+  tinygltf::Model model;
+
+  if (!loadGltfFile(model)) {
+	  std::cerr << "Failed to load glTF model" << std::endl;
+
+	  return -1;
+  }
 
   // TODO Creation of Buffer Objects
 
