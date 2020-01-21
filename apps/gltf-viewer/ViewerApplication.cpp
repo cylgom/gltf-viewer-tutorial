@@ -21,7 +21,7 @@ void keyCallback(
   }
 }
 
-bool ViewerApplication::loadGltfFile(tinygltf::Model & model)
+bool ViewerApplication::loadGltfFile(tinygltf::Model& model)
 {
 	std::string err;
 	std::string warn;
@@ -39,6 +39,29 @@ bool ViewerApplication::loadGltfFile(tinygltf::Model & model)
 	}
 
 	return ret;
+}
+
+std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model& model)
+{
+	size_t len = model.buffers.size();
+
+	std::vector<GLuint> bo(len, 0);
+	glGenBuffers(len, bo.data());
+
+	for (size_t i = 0; i < len; ++i)
+	{
+		glBindBuffer(GL_ARRAY_BUFFER, bo[i]);
+
+		glBufferStorage(
+			GL_ARRAY_BUFFER,
+			model.buffers[i].data.size(),
+			model.buffers[i].data.data(),
+			0);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	return bo;
 }
 
 int ViewerApplication::run()
@@ -84,6 +107,7 @@ int ViewerApplication::run()
   }
 
   // TODO Creation of Buffer Objects
+  const std::vector<GLuint> bo = createBufferObjects(model);
 
   // TODO Creation of Vertex Array Objects
 

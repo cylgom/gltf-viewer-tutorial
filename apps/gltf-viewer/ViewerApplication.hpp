@@ -60,5 +60,6 @@ private:
 
   tinygltf::TinyGLTF m_gltfLoader;
 
-  bool loadGltfFile(tinygltf::Model & model);
+  bool loadGltfFile(tinygltf::Model& model);
+  std::vector<GLuint> createBufferObjects(const tinygltf::Model& model);
 };
