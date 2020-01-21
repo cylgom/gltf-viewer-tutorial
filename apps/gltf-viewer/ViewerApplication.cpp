@@ -13,6 +13,10 @@
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
 
+#define VERTEX_ATTRIB_POSITION_IDX 0
+#define VERTEX_ATTRIB_NORMAL_IDX 1
+#define VERTEX_ATTRIB_TEXCOORD0_IDX 2
+
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
 {
@@ -64,6 +68,104 @@ std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model
 	return bo;
 }
 
+void vao_init(
+	const tinygltf::Model& model,
+	const tinygltf::Primitive& primitive,
+	const std::vector<GLuint>& bufferObjects,
+	const char* str,
+	const GLuint index)
+{
+	const auto iterator = primitive.attributes.find(str);
+
+	// If "POSITION" has been found in the map
+	if (iterator != end(primitive.attributes))
+	{
+		// (*iterator).first is the key "POSITION", (*iterator).second
+		// is the value, ie. the index of the accessor for this attribute
+		const auto accessorIdx = (*iterator).second;
+
+		// TODO get the correct tinygltf::Accessor from model.accessors
+		const auto& accessor = model.accessors[accessorIdx];
+
+		// TODO get the correct tinygltf::BufferView from model.bufferViews. You need use the accessor
+		const auto& bufferView = model.bufferViews[accessor.bufferView];
+
+		// TODO get the index of the buffer used by the bufferView (you need to use it)
+		const auto bufferIdx = bufferView.buffer;
+
+		// TODO get the correct buffer object from the buffer index
+		const auto bufferObject = model.buffers[bufferIdx];
+
+		// TODO Enable the vertex attrib array corresponding to POSITION with glEnableVertexAttribArray
+		// (you need to use VERTEX_ATTRIB_POSITION_IDX which is defined at the top of the file)
+		glEnableVertexAttribArray(index);
+
+		// TODO Bind the buffer object to GL_ARRAY_BUFFER
+		glBindBuffer(GL_ARRAY_BUFFER, bufferObjects[bufferIdx]);
+
+		// TODO Compute the total byte offset using the accessor and the buffer view
+		const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
+
+		// TODO Call glVertexAttribPointer with the correct arguments. 
+		// Remember size is obtained with accessor.type, type is obtained with accessor.componentType. 
+		// The stride is obtained in the bufferView, normalized is always GL_FALSE, and pointer is the byteOffset (cast).
+		glVertexAttribPointer(
+			index,
+			accessor.type,
+			accessor.componentType,
+			GL_FALSE,
+			bufferView.byteStride,
+			(const GLvoid*) byteOffset);
+	}
+}
+
+std::vector<GLuint> ViewerApplication::createVertexArrayObjects(
+	const tinygltf::Model& model,
+	const std::vector<GLuint>& bufferObjects,
+	std::vector<VaoRange>& meshIndexToVaoRange)
+{
+	std::vector<GLuint> vertexArrayObjects(0, 0);
+
+	size_t offset;
+	size_t primitive_len;
+	size_t mesh_len = model.meshes.size();
+
+	meshIndexToVaoRange.resize(mesh_len);
+
+	for (size_t i = 0; i < mesh_len; ++i)
+	{
+		offset = vertexArrayObjects.size();
+		primitive_len = model.meshes[i].primitives.size();
+
+		meshIndexToVaoRange[i].begin = (GLsizei) offset,
+		meshIndexToVaoRange[i].count = (GLsizei) primitive_len,
+
+		vertexArrayObjects.resize(offset + primitive_len);
+		glGenVertexArrays(primitive_len, vertexArrayObjects.data() + offset);
+
+		for (size_t k = 0; k < primitive_len; ++k)
+		{
+			glBindVertexArray(vertexArrayObjects[offset + k]);
+			const tinygltf::Primitive& primitive = model.meshes[i].primitives[k];
+			vao_init(model, primitive, bufferObjects, "POSITION", VERTEX_ATTRIB_POSITION_IDX);
+			vao_init(model, primitive, bufferObjects, "NORMAL", VERTEX_ATTRIB_NORMAL_IDX);
+			vao_init(model, primitive, bufferObjects, "TEXCOORD_0", VERTEX_ATTRIB_TEXCOORD0_IDX);
+
+			if (primitive.indices >= 0)
+			{
+				const auto& accessor = model.accessors[primitive.indices];
+				const auto& bufferView = model.bufferViews[accessor.bufferView];
+
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, bufferObjects[bufferView.buffer]);
+			}
+		}
+	}
+
+	glBindVertexArray(0);
+
+	return vertexArrayObjects;
+}
+
 int ViewerApplication::run()
 {
   // Loader shaders
@@ -107,33 +209,47 @@ int ViewerApplication::run()
   }
 
   // TODO Creation of Buffer Objects
-  const std::vector<GLuint> bo = createBufferObjects(model);
+  const std::vector<GLuint> bufferObjects = createBufferObjects(model);
 
   // TODO Creation of Vertex Array Objects
+  std::vector<VaoRange> meshIndexToVaoRange;
+
+  const std::vector<GLuint> vertexArrayObjects = createVertexArrayObjects(
+		model,
+		bufferObjects,
+		meshIndexToVaoRange);
 
   // Setup OpenGL state for rendering
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
-  // Lambda function to draw the scene
-  const auto drawScene = [&](const Camera &camera) {
-    glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// Lambda function to draw the scene
+	const auto drawScene = [&](const Camera &camera)
+	{
+		glViewport(0, 0, m_nWindowWidth, m_nWindowHeight);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const auto viewMatrix = camera.getViewMatrix();
+		const auto viewMatrix = camera.getViewMatrix();
 
-    // The recursive function that should draw a node
-    // We use a std::function because a simple lambda cannot be recursive
-    const std::function<void(int, const glm::mat4 &)> drawNode =
-        [&](int nodeIdx, const glm::mat4 &parentMatrix) {
-          // TODO The drawNode function
-        };
+		// The recursive function that should draw a node
+		// We use a std::function because a simple lambda cannot be recursive
+		const std::function<void(int, const glm::mat4 &)> drawNode =
+		[&](int nodeIdx, const glm::mat4 &parentMatrix)
+		{
+			// TODO The drawNode function
 
-    // Draw the scene referenced by gltf file
-    if (model.defaultScene >= 0) {
-      // TODO Draw all nodes
-    }
-  };
+		};
+
+		// Draw the scene referenced by gltf file
+		if (model.defaultScene >= 0)
+		{
+			// TODO Draw all nodes
+			for (size_t i = 0; i < model.scenes[model.defaultScene].nodes.size(); ++i)
+			{
+				drawNode(model.scenes[model.defaultScene].nodes[i], glm::mat4(1));
+			}
+		}
+	};
 
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
