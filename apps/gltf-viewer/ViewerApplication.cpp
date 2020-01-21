@@ -9,6 +9,7 @@
 #include <glm/gtx/io.hpp>
 
 #include "utils/cameras.hpp"
+#include "utils/gltf.hpp"
 
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
@@ -237,7 +238,46 @@ int ViewerApplication::run()
 		[&](int nodeIdx, const glm::mat4 &parentMatrix)
 		{
 			// TODO The drawNode function
+			tinygltf::Node& node = model.nodes[nodeIdx];
+			glm::mat4 modelMatrix = getLocalToWorldMatrix(
+				node,
+				parentMatrix);
 
+			if (node.mesh >= 0)
+			{
+				glm::mat4 modelViewMatrix = viewMatrix * modelMatrix;
+				glm::mat4 modelViewProjectionMatrix = projMatrix * modelViewMatrix;
+				glm::mat4 normalMatrix = glm::inverse(glm::transpose(modelViewMatrix));
+
+				glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
+				glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjectionMatrix));
+				glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+			}
+
+			tinygltf::Mesh& mesh = model.meshes[node.mesh];
+			struct VaoRange& range = meshIndexToVaoRange[node.mesh];
+
+			for (size_t i = 0; i < range.count; ++i)
+			{
+				glBindVertexArray(vertexArrayObjects[range.begin + i]);
+				tinygltf::Primitive& primitive = mesh.primitives[i];
+
+				if (primitive.indices >= 0)
+				{
+					const auto& accessor = model.accessors[primitive.indices];
+					const auto& bufferView = model.bufferViews[accessor.bufferView];
+					const auto byteOffset = bufferView.byteOffset + accessor.byteOffset;
+
+					glDrawElements(primitive.mode, accessor.count, accessor.componentType, (const GLvoid*) byteOffset);
+				}
+				else
+				{
+					const auto accessorIdx = (*begin(primitive.attributes)).second;
+					const auto &accessor = model.accessors[accessorIdx];
+
+					glDrawArrays(primitive.mode, 0, accessor.count);
+				}
+			}
 		};
 
 		// Draw the scene referenced by gltf file
