@@ -289,6 +289,8 @@ int ViewerApplication::run()
 				drawNode(model.scenes[model.defaultScene].nodes[i], glm::mat4(1));
 			}
 		}
+
+		glBindVertexArray(0);
 	};
 
   // Loop until the user closes the window
