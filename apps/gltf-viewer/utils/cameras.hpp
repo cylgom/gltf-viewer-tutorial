@@ -21,6 +21,16 @@ public:
 
   glm::mat4 getViewMatrix() const { return glm::lookAt(m_eye, m_center, m_up); }
 
+  void setEye(glm::vec3 eye)
+  {
+	  m_eye = eye;
+  }
+
+  void setUp(glm::vec3 up)
+  {
+	  m_up = up;
+  }
+
   // Move the camera along its left axis.
   void truckLeft(float offset)
   {

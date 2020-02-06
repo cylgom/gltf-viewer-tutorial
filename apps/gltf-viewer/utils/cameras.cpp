@@ -107,4 +107,75 @@ bool FirstPersonCameraController::update(float elapsedTime)
   return true;
 }
 
-bool TrackballCameraController::update(float elapsedTime) { return false; }
+bool TrackballCameraController::update(float elapsedTime)
+{
+	if (glfwGetMouseButton(
+		m_pWindow,
+		GLFW_MOUSE_BUTTON_MIDDLE) && !m_MiddleButtonPressed)
+	{
+		m_MiddleButtonPressed = true;
+		glfwGetCursorPos(
+			m_pWindow,
+			&m_LastCursorPosition.x,
+			&m_LastCursorPosition.y);
+	}
+	else if (!glfwGetMouseButton(
+		m_pWindow,
+		GLFW_MOUSE_BUTTON_MIDDLE) && m_MiddleButtonPressed)
+	{
+		m_MiddleButtonPressed = false;
+	}
+
+	const auto cursorDelta = ([&]()
+	{
+		if (m_MiddleButtonPressed)
+		{
+			dvec2 cursorPosition;
+			glfwGetCursorPos(m_pWindow, &cursorPosition.x, &cursorPosition.y);
+
+			const auto delta = cursorPosition - m_LastCursorPosition;
+			m_LastCursorPosition = cursorPosition;
+
+			return delta;
+		}
+
+		return dvec2(0);
+	})();
+
+	const float latitude = -0.01f * float(cursorDelta.x);
+	const float longitude = -0.01f * float(cursorDelta.y);
+
+	if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_CONTROL))
+	{
+
+	}
+	else if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_SHIFT))
+	{
+
+	}
+	else
+	{
+
+	}
+
+#if 0
+	if (!hasMoved) {
+		return false;
+	}
+
+	m_camera.moveLocal(truckLeft, pedestalUp, dollyIn);
+	m_camera.rotateLocal(rollRightAngle, tiltDownAngle, 0.f);
+	m_camera.rotateWorld(panLeftAngle, m_worldUpAxis);
+#endif
+
+	glm::vec3 prev = m_camera.eye() - m_camera.center();
+	glm::vec3 perp = glm::cross(m_worldUpAxis, prev);
+
+	glm::mat4 mat = glm::rotate(glm::mat4(1), longitude, perp)
+		* glm::rotate(glm::mat4(1), latitude, m_worldUpAxis);
+
+	m_camera.setEye(m_camera.center() + glm::vec3(mat * glm::vec4(prev, 0)));
+	m_camera.setUp(glm::vec3(mat * glm::vec4(m_camera.up(), 0)));
+
+	return true;
+}

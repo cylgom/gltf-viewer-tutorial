@@ -182,25 +182,6 @@ int ViewerApplication::run()
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
-  // Build projection matrix
-  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
-  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
-  const auto projMatrix =
-      glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
-          0.001f * maxDistance, 1.5f * maxDistance);
-
-  // TODO Implement a new CameraController model and use it instead. Propose the
-  // choice from the GUI
-  FirstPersonCameraController cameraController{
-      m_GLFWHandle.window(), 0.5f * maxDistance};
-  if (m_hasUserCamera) {
-    cameraController.setCamera(m_userCamera);
-  } else {
-    // TODO Use scene bounds to compute a better default camera
-    cameraController.setCamera(
-        Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
-  }
-
   // TODO Loading the glTF file
   tinygltf::Model model;
 
@@ -208,6 +189,49 @@ int ViewerApplication::run()
 	  std::cerr << "Failed to load glTF model" << std::endl;
 
 	  return -1;
+  }
+
+  // TODO Implement a new CameraController model and use it instead.
+  glm::vec3 bboxMin;
+  glm::vec3 bboxMax;
+
+  computeSceneBounds(model, bboxMin, bboxMax);
+
+  glm::vec3 diag = bboxMax - bboxMin;
+
+  // Build projection matrix
+  auto maxDistance = glm::length(diag);
+  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
+
+  const auto projMatrix = glm::perspective(
+		  70.f,
+		  float(m_nWindowWidth) / m_nWindowHeight,
+          0.001f * maxDistance,
+		  1.5f * maxDistance);
+
+  TrackballCameraController cameraController(m_GLFWHandle.window());
+
+  if (m_hasUserCamera)
+  {
+    cameraController.setCamera(m_userCamera);
+  }
+  else
+  {
+    // TODO Use scene bounds to compute a better default camera
+	glm::vec3 eye;
+	glm::vec3 up(0, 1, 0);
+	glm::vec3 center = bboxMin + (0.5f * diag);
+
+	if (diag.z > 0)
+	{
+		eye = center + diag;
+	}
+	else
+	{
+		eye = center + 2.f * glm::cross(diag, up);
+	}
+
+    cameraController.setCamera(Camera{eye, center, up});
   }
 
   // TODO Creation of Buffer Objects
