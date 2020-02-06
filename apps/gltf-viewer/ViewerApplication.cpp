@@ -181,6 +181,10 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
+  const auto lightDirectionLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightDirection");
+  const auto lightRadianceLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightRadiance");
 
   // TODO Loading the glTF file
   tinygltf::Model model;
@@ -278,9 +282,28 @@ int ViewerApplication::run()
 				glm::mat4 modelViewProjectionMatrix = projMatrix * modelViewMatrix;
 				glm::mat4 normalMatrix = glm::inverse(glm::transpose(modelViewMatrix));
 
+				glm::vec3 lightDirection = glm::normalize(viewMatrix * glm::vec4(1.0f,1.0f,1.0f,0.0f));
+				glm::vec3 lightRadiance = glm::vec3(1.0f,1.0f,1.0f);
+
 				glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
 				glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjectionMatrix));
 				glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+				if (lightDirectionLocation >= 0)
+				{
+					glUniform3f(lightDirectionLocation,
+						lightDirection[0],
+						lightDirection[1],
+						lightDirection[2]);
+				}
+
+				if (lightRadianceLocation >= 0)
+				{
+					glUniform3f(lightRadianceLocation,
+						lightRadiance[0],
+						lightRadiance[1],
+						lightRadiance[2]);
+				}
 			}
 
 			tinygltf::Mesh& mesh = model.meshes[node.mesh];
