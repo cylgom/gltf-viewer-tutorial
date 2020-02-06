@@ -209,11 +209,15 @@ int ViewerApplication::run()
           0.001f * maxDistance,
 		  1.5f * maxDistance);
 
-  TrackballCameraController cameraController(m_GLFWHandle.window());
+  int controls_type;
+
+  std::unique_ptr<CameraController> cameraController(
+	  std::make_unique<TrackballCameraController>(
+		  m_GLFWHandle.window()));
 
   if (m_hasUserCamera)
   {
-    cameraController.setCamera(m_userCamera);
+    cameraController->setCamera(m_userCamera);
   }
   else
   {
@@ -231,7 +235,7 @@ int ViewerApplication::run()
 		eye = center + 2.f * glm::cross(diag, up);
 	}
 
-    cameraController.setCamera(Camera{eye, center, up});
+    cameraController->setCamera(Camera{eye, center, up});
   }
 
   // TODO Creation of Buffer Objects
@@ -330,7 +334,7 @@ int ViewerApplication::run()
 			pixels.data(),
 			[&]()
 			{
-				drawScene(cameraController.getCamera());
+				drawScene(cameraController->getCamera());
 			});
 
 		flipImageYAxis(
@@ -355,7 +359,7 @@ int ViewerApplication::run()
        ++iterationCount) {
     const auto seconds = glfwGetTime();
 
-    const auto camera = cameraController.getCamera();
+    const auto camera = cameraController->getCamera();
     drawScene(camera);
 
     // GUI code:
@@ -387,6 +391,30 @@ int ViewerApplication::run()
           const auto str = ss.str();
           glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
         }
+
+		int controls_immediate;
+		ImGui::Text("Controls type");
+        ImGui::RadioButton("Trackball", &controls_immediate, 0);
+        ImGui::RadioButton("First-person", &controls_immediate, 1);
+
+		if (controls_type != controls_immediate)
+		{
+			controls_type = controls_immediate;
+			const Camera& oldCamera = cameraController->getCamera();
+
+			if (controls_type == 0)
+			{
+				cameraController = std::make_unique<TrackballCameraController>(
+					m_GLFWHandle.window());
+			}
+			else
+			{
+				cameraController = std::make_unique<FirstPersonCameraController>(
+					m_GLFWHandle.window());
+			}
+
+			cameraController->setCamera(oldCamera);
+		}
       }
       ImGui::End();
     }
@@ -399,7 +427,7 @@ int ViewerApplication::run()
     auto guiHasFocus =
         ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard;
     if (!guiHasFocus) {
-      cameraController.update(float(ellapsedTime));
+      cameraController->update(float(ellapsedTime));
     }
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
