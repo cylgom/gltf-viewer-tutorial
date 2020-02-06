@@ -142,40 +142,38 @@ bool TrackballCameraController::update(float elapsedTime)
 		return dvec2(0);
 	})();
 
-	const float latitude = -0.01f * float(cursorDelta.x);
-	const float longitude = -0.01f * float(cursorDelta.y);
+	const float latitude = 0.01f * float(cursorDelta.x);
+	const float longitude = 0.01f * float(cursorDelta.y);
 
 	if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_CONTROL))
 	{
+		const glm::vec3 vec =
+			(1 - longitude) * (m_camera.eye() - m_camera.center());
 
+		if (glm::length(vec) > 0.1f)
+		{
+			m_camera.setEye(m_camera.center() + vec);
+		}
 	}
 	else if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_SHIFT))
 	{
+		m_camera.moveLocal(latitude, longitude, 0.0f);
+	}
+	else if (m_MiddleButtonPressed)
+	{
+		const glm::vec3 prev = m_camera.eye() - m_camera.center();
+		const glm::vec3 perp = glm::cross(m_worldUpAxis, prev);
 
+		const glm::mat4 mat = glm::rotate(glm::mat4(1.0f), -longitude, perp)
+			* glm::rotate(glm::mat4(1.0f), -latitude, m_worldUpAxis);
+
+		m_camera.setEye(m_camera.center() + glm::vec3(mat * glm::vec4(prev, 0.0f)));
+		m_camera.setUp(glm::vec3(mat * glm::vec4(m_camera.up(), 0.0f)));
 	}
 	else
 	{
-
-	}
-
-#if 0
-	if (!hasMoved) {
 		return false;
 	}
-
-	m_camera.moveLocal(truckLeft, pedestalUp, dollyIn);
-	m_camera.rotateLocal(rollRightAngle, tiltDownAngle, 0.f);
-	m_camera.rotateWorld(panLeftAngle, m_worldUpAxis);
-#endif
-
-	glm::vec3 prev = m_camera.eye() - m_camera.center();
-	glm::vec3 perp = glm::cross(m_worldUpAxis, prev);
-
-	glm::mat4 mat = glm::rotate(glm::mat4(1), longitude, perp)
-		* glm::rotate(glm::mat4(1), latitude, m_worldUpAxis);
-
-	m_camera.setEye(m_camera.center() + glm::vec3(mat * glm::vec4(prev, 0)));
-	m_camera.setUp(glm::vec3(mat * glm::vec4(m_camera.up(), 0)));
 
 	return true;
 }
