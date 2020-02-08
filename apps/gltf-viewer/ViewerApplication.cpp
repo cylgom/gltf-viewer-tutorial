@@ -213,7 +213,14 @@ int ViewerApplication::run()
           0.001f * maxDistance,
 		  1.5f * maxDistance);
 
-  int controls_type;
+  int controlsType = 0;
+  bool lightHeader = false;
+  bool lightFromCamera = false;
+  float lightAngleH = 1.55f;
+  float lightAngleV = 2.0f;
+
+  glm::vec3 lightDirectionRaw = glm::vec3(1.0f, 1.0f, 1.0f);
+  glm::vec3 lightRadiance = glm::vec3(1.0f, 1.0f, 1.0f);
 
   std::unique_ptr<CameraController> cameraController(
 	  std::make_unique<TrackballCameraController>(
@@ -282,8 +289,16 @@ int ViewerApplication::run()
 				glm::mat4 modelViewProjectionMatrix = projMatrix * modelViewMatrix;
 				glm::mat4 normalMatrix = glm::inverse(glm::transpose(modelViewMatrix));
 
-				glm::vec3 lightDirection = glm::normalize(viewMatrix * glm::vec4(1.0f,1.0f,1.0f,0.0f));
-				glm::vec3 lightRadiance = glm::vec3(1.0f,1.0f,1.0f);
+				glm::vec3 lightDirection;
+
+				if (lightFromCamera)
+				{
+					lightDirection = glm::vec3(0.0f, 0.0f, 1.0f);
+				}
+				else
+				{
+					lightDirection = glm::normalize(viewMatrix * glm::vec4(lightDirectionRaw, 0.0f));
+				}
 
 				glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
 				glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjectionMatrix));
@@ -415,17 +430,14 @@ int ViewerApplication::run()
           glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
         }
 
-		int controls_immediate;
 		ImGui::Text("Controls type");
-        ImGui::RadioButton("Trackball", &controls_immediate, 0);
-        ImGui::RadioButton("First-person", &controls_immediate, 1);
 
-		if (controls_type != controls_immediate)
+        if (ImGui::RadioButton("Trackball", &controlsType, 0)
+		|| ImGui::RadioButton("First-person", &controlsType, 1))
 		{
-			controls_type = controls_immediate;
 			const Camera& oldCamera = cameraController->getCamera();
 
-			if (controls_type == 0)
+			if (controlsType == 0)
 			{
 				cameraController = std::make_unique<TrackballCameraController>(
 					m_GLFWHandle.window());
@@ -438,7 +450,24 @@ int ViewerApplication::run()
 
 			cameraController->setCamera(oldCamera);
 		}
+
+		if (ImGui::CollapsingHeader("Light"), &lightHeader)
+		{
+			if (ImGui::SliderFloat("Vertical", &lightAngleV, 0.0f, 3.14f)
+			|| ImGui::SliderFloat("Horizontal", &lightAngleH, 0.0f, 6.28f))
+			{
+				lightDirectionRaw = glm::vec3(
+					sinf(lightAngleV) * cosf(lightAngleH),
+					cosf(lightAngleV),
+					sinf(lightAngleV) * sinf(lightAngleH));
+			}
+
+			ImGui::ColorEdit3("Color#lightColor", (float*) &lightRadiance, 0);
+
+			ImGui::Checkbox("Bind to Camera", &lightFromCamera);
+		}
       }
+
       ImGui::End();
     }
 
