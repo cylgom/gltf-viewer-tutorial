@@ -9,9 +9,14 @@
 class ViewerApplication
 {
 public:
-  ViewerApplication(const fs::path &appPath, uint32_t width, uint32_t height,
-      const fs::path &gltfFile, const std::vector<float> &lookatArgs,
-      const std::string &vertexShader, const std::string &fragmentShader,
+  ViewerApplication(
+	  const fs::path &appPath,
+	  uint32_t width,
+	  uint32_t height,
+      const fs::path &gltfFile,
+	  const std::vector<float> &lookatArgs,
+      const std::string &vertexShader,
+	  const std::string &fragmentShader,
       const fs::path &output);
 
   int run();
@@ -33,7 +38,8 @@ private:
 
   fs::path m_gltfFilePath;
   std::string m_vertexShader = "forward.vs.glsl";
-  std::string m_fragmentShader = "diffuse_directional_light.fs.glsl";
+  std::string m_fragmentShader = "pbr_directional_light.fs.glsl";
+  // default: diffuse_directional_light.fs.glsl
 
   bool m_hasUserCamera = false;
   Camera m_userCamera;
@@ -61,9 +67,12 @@ private:
   tinygltf::TinyGLTF m_gltfLoader;
 
   bool loadGltfFile(tinygltf::Model& model);
-  std::vector<GLuint> createBufferObjects(const tinygltf::Model& model);
+  std::vector<GLuint> createBufferObjects(
+	  const tinygltf::Model& model);
   std::vector<GLuint> createVertexArrayObjects(
 	  const tinygltf::Model& model,
 	  const std::vector<GLuint>& bufferObjects,
 	  std::vector<VaoRange>& meshIndexToVaoRange);
+  std::vector<GLuint> createTextureObjects(
+	  const tinygltf::Model &model) const;
 };
