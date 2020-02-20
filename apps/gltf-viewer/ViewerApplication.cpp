@@ -265,6 +265,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
   const auto baseColorLocation =
       glGetUniformLocation(glslProgram.glId(), "uBaseColorTexture");
+  const auto baseColorFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uBaseColorFactor");
 
   // TODO Loading the glTF file
   tinygltf::Model model;
@@ -295,7 +297,7 @@ int ViewerApplication::run()
 
   int controlsType = 0;
   bool lightHeader = false;
-  bool lightFromCamera = false;
+  bool lightFromCamera = true;
   float lightAngleH = 1.55f;
   float lightAngleV = 2.0f;
 
@@ -390,6 +392,13 @@ int ViewerApplication::run()
 				glBindTexture(GL_TEXTURE_2D, textureObjects[texture.source]);
 				glUniform1i(baseColorLocation, 0);
 
+				glUniform4f(
+					baseColorFactorLocation,
+					pbrMetallicRoughness.baseColorFactor[0],
+					pbrMetallicRoughness.baseColorFactor[1],
+					pbrMetallicRoughness.baseColorFactor[2],
+					pbrMetallicRoughness.baseColorFactor[3]);
+
 				return;
 			}
 		}
@@ -397,6 +406,7 @@ int ViewerApplication::run()
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, whiteTexture);
 		glUniform1i(baseColorLocation, 0);
+		glUniform4f(baseColorFactorLocation, 1, 1, 1, 1);
 	};
 
 	// Lambda function to draw the scene
