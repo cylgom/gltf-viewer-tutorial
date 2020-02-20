@@ -268,6 +268,13 @@ int ViewerApplication::run()
   const auto baseColorFactorLocation =
       glGetUniformLocation(glslProgram.glId(), "uBaseColorFactor");
 
+  const auto metallicFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uMetallicFactor");
+  const auto roughnessFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uRoughnessFactor");
+  const auto metallicRoughnessTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uMetallicRoughnessTexture");
+
   // TODO Loading the glTF file
   tinygltf::Model model;
 
@@ -389,15 +396,32 @@ int ViewerApplication::run()
 					pbrMetallicRoughness.baseColorTexture.index];
 
 				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, textureObjects[texture.source]);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textureObjects[texture.source]);
 				glUniform1i(baseColorLocation, 0);
 
+				glActiveTexture(GL_TEXTURE1);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textureObjects[
+						pbrMetallicRoughness.metallicRoughnessTexture.index]);
+				glUniform1i(metallicRoughnessTextureLocation, 1);
+				
 				glUniform4f(
 					baseColorFactorLocation,
 					pbrMetallicRoughness.baseColorFactor[0],
 					pbrMetallicRoughness.baseColorFactor[1],
 					pbrMetallicRoughness.baseColorFactor[2],
 					pbrMetallicRoughness.baseColorFactor[3]);
+
+				glUniform1f(
+					metallicFactorLocation,
+					pbrMetallicRoughness.metallicFactor);
+
+				glUniform1f(
+					roughnessFactorLocation,
+					pbrMetallicRoughness.roughnessFactor);
 
 				return;
 			}
@@ -406,7 +430,12 @@ int ViewerApplication::run()
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, whiteTexture);
 		glUniform1i(baseColorLocation, 0);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUniform1i(metallicRoughnessTextureLocation, 1);
 		glUniform4f(baseColorFactorLocation, 1, 1, 1, 1);
+		glUniform1f(metallicFactorLocation, 0);
+		glUniform1f(roughnessFactorLocation, 0);
 	};
 
 	// Lambda function to draw the scene
