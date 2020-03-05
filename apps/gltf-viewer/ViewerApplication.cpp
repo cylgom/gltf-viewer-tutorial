@@ -285,6 +285,11 @@ int ViewerApplication::run()
   const auto occlusionStrengthLocation =
       glGetUniformLocation(glslProgram.glId(), "uOcclusionStrength");
 
+  const auto normalTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uNormalTexture");
+  const auto normalScaleLocation =
+      glGetUniformLocation(glslProgram.glId(), "uNormalScale");
+
   // TODO Loading the glTF file
   tinygltf::Model model;
 
@@ -409,6 +414,9 @@ int ViewerApplication::run()
 			const auto &occlusionTexture =
 				material.occlusionTexture;
 
+			const auto &normalTexture =
+				material.normalTexture;
+
 			if (model.textures.size() > 0)
 			{
 				const auto &texture = model.textures[
@@ -468,6 +476,17 @@ int ViewerApplication::run()
 					occlusionStrengthLocation,
 					occlusionTexture.strength);
 
+				// normal map
+				glActiveTexture(GL_TEXTURE4);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textureObjects[normalTexture.index]);
+				glUniform1i(normalTextureLocation, 4);
+
+				glUniform1f(
+					normalScaleLocation,
+					normalTexture.scale);
+
 				return;
 			}
 		}
@@ -490,6 +509,10 @@ int ViewerApplication::run()
 		glActiveTexture(GL_TEXTURE3);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glUniform1f(occlusionStrengthLocation, 1);
+
+		glActiveTexture(GL_TEXTURE4);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUniform1f(normalScaleLocation, 1);
 	};
 
 	// Lambda function to draw the scene

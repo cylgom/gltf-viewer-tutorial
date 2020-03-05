@@ -20,6 +20,9 @@ uniform sampler2D uEmissiveTexture;
 uniform float uOcclusionStrength;
 uniform sampler2D uOcclusionTexture;
 
+uniform float uNormalScale;
+uniform sampler2D uNormalTexture;
+
 out vec3 fColor;
 
 // Constants
@@ -48,12 +51,39 @@ vec4 SRGBtoLINEAR(vec4 srgbIn)
 
 void main()
 {
+  // normal map
+  vec4 normalSample =
+	  texture2D(uNormalTexture, vTexCoords);
+  vec3 scaledNormal =
+	  normalize((normalSample.xyz * 2.0 - 1.0) * vec3(uNormalScale, uNormalScale, 1.0));
+
+  // tbn matrix
+  vec3 fragTgX = dFdx(vViewSpacePosition);
+  vec3 fragTgY = dFdy(vViewSpacePosition);
+
+  vec2 texTgX = dFdx(vTexCoords);
+  vec2 texTgY = dFdy(vTexCoords);
+
+  vec3 t = normalize(texTgY.y * fragTgX - texTgX.y * fragTgX);
+  vec3 b = normalize(texTgX.x * fragTgX - texTgX.x * fragTgY);
+  vec3 n = normalize(vViewSpaceNormal);
+
+  t = normalize(cross(
+	  cross(n, t),
+	  n));
+
+  b = normalize(cross(
+	  n,
+	  cross(b, n)));
+
+  mat3 tbn = mat3(t, b, n);
+
   // constants
   vec3 dielectricSpecular = vec3(0.04, 0.04, 0.04);
   vec3 black = vec3(0, 0, 0);
-  vec3 N = normalize(vViewSpaceNormal);
-  vec3 L = uLightDirection;
-  vec3 V = normalize(-vViewSpacePosition);
+  vec3 N = normalize(scaledNormal);
+  vec3 L = tbn * uLightDirection;
+  vec3 V = tbn * normalize(-vViewSpacePosition);
   vec3 H = normalize(L+V);
 
   // dot products
@@ -130,5 +160,5 @@ void main()
 
   // done
   vec3 unoc_color = (f_diffuse + f_specular) * uLightIntensity * NdotL;
-  fColor = LINEARtoSRGB(mix(unoc_color, unoc_color * ocSample.rgb, uOcclusionStrength) + emissive);
+  fColor = LINEARtoSRGB(mix(unoc_color, unoc_color * ocSample.r, uOcclusionStrength) + emissive);
 }
