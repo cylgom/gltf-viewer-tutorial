@@ -280,6 +280,11 @@ int ViewerApplication::run()
   const auto emissiveFactorLocation =
       glGetUniformLocation(glslProgram.glId(), "uEmissiveFactor");
 
+  const auto occlusionTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uOcclusionTexture");
+  const auto occlusionStrengthLocation =
+      glGetUniformLocation(glslProgram.glId(), "uOcclusionStrength");
+
   // TODO Loading the glTF file
   tinygltf::Model model;
 
@@ -401,6 +406,9 @@ int ViewerApplication::run()
 			const auto &emissiveFactor =
 				material.emissiveFactor;
 
+			const auto &occlusionTexture =
+				material.occlusionTexture;
+
 			if (model.textures.size() > 0)
 			{
 				const auto &texture = model.textures[
@@ -449,6 +457,17 @@ int ViewerApplication::run()
 					emissiveFactor[1],
 					emissiveFactor[2]);
 
+				// occlusion
+				glActiveTexture(GL_TEXTURE3);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textureObjects[occlusionTexture.index]);
+				glUniform1i(occlusionTextureLocation, 3);
+
+				glUniform1f(
+					occlusionStrengthLocation,
+					occlusionTexture.strength);
+
 				return;
 			}
 		}
@@ -467,6 +486,10 @@ int ViewerApplication::run()
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glUniform3f(emissiveFactorLocation, 0, 0, 0);
+
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUniform1f(occlusionStrengthLocation, 1);
 	};
 
 	// Lambda function to draw the scene
