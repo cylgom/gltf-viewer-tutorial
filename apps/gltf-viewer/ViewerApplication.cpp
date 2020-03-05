@@ -275,6 +275,11 @@ int ViewerApplication::run()
   const auto metallicRoughnessTextureLocation =
       glGetUniformLocation(glslProgram.glId(), "uMetallicRoughnessTexture");
 
+  const auto emissiveTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uEmissiveTexture");
+  const auto emissiveFactorLocation =
+      glGetUniformLocation(glslProgram.glId(), "uEmissiveFactor");
+
   // TODO Loading the glTF file
   tinygltf::Model model;
 
@@ -390,17 +395,25 @@ int ViewerApplication::run()
 			const auto &pbrMetallicRoughness =
 				material.pbrMetallicRoughness;
 
+			const auto &emissiveTexture =
+				material.emissiveTexture;
+
+			const auto &emissiveFactor =
+				material.emissiveFactor;
+
 			if (model.textures.size() > 0)
 			{
 				const auto &texture = model.textures[
 					pbrMetallicRoughness.baseColorTexture.index];
 
+				// base color
 				glActiveTexture(GL_TEXTURE0);
 				glBindTexture(
 					GL_TEXTURE_2D,
 					textureObjects[texture.source]);
 				glUniform1i(baseColorLocation, 0);
 
+				// metallic roughness
 				glActiveTexture(GL_TEXTURE1);
 				glBindTexture(
 					GL_TEXTURE_2D,
@@ -423,6 +436,19 @@ int ViewerApplication::run()
 					roughnessFactorLocation,
 					pbrMetallicRoughness.roughnessFactor);
 
+				// emissive
+				glActiveTexture(GL_TEXTURE2);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textureObjects[emissiveTexture.index]);
+				glUniform1i(emissiveTextureLocation, 2);
+
+				glUniform3f(
+					emissiveFactorLocation,
+					emissiveFactor[0],
+					emissiveFactor[1],
+					emissiveFactor[2]);
+
 				return;
 			}
 		}
@@ -430,12 +456,17 @@ int ViewerApplication::run()
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, whiteTexture);
 		glUniform1i(baseColorLocation, 0);
+
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glUniform1i(metallicRoughnessTextureLocation, 1);
 		glUniform4f(baseColorFactorLocation, 1, 1, 1, 1);
 		glUniform1f(metallicFactorLocation, 0);
 		glUniform1f(roughnessFactorLocation, 0);
+
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUniform3f(emissiveFactorLocation, 0, 0, 0);
 	};
 
 	// Lambda function to draw the scene
