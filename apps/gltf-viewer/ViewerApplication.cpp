@@ -20,6 +20,7 @@
 #define VERTEX_ATTRIB_NORMAL_IDX 1
 #define VERTEX_ATTRIB_TEXCOORD0_IDX 2
 #define SKYBOX_SIZE 512
+#define IRRADIANCEMAP_SIZE 32
 
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -137,42 +138,6 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// prepare camera positions for texture rendering
-	glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
-
-	glm::mat4 captureViews[] = 
-	{
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3( 1.0f,  0.0f,  0.0f),
-			glm::vec3(0.0f, -1.0f,  0.0f)),
-
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(-1.0f,  0.0f,  0.0f),
-			glm::vec3(0.0f, -1.0f,  0.0f)),
-
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3( 0.0f,  1.0f,  0.0f),
-			glm::vec3(0.0f,  0.0f,  1.0f)),
-
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3( 0.0f, -1.0f,  0.0f),
-			glm::vec3(0.0f,  0.0f, -1.0f)),
-
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3( 0.0f,  0.0f,  1.0f),
-			glm::vec3(0.0f, -1.0f,  0.0f)),
-
-		glm::lookAt(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3( 0.0f,  0.0f, -1.0f),
-			glm::vec3(0.0f, -1.0f,  0.0f))
-	};
-
 	// cubemap-correction shaders
 	const auto glslCubemapProgram =
 		compileProgram({
@@ -192,7 +157,7 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 		cubemapModelProjMatrixLocation,
 		1,
 		GL_FALSE,
-		glm::value_ptr(captureProjection));
+		glm::value_ptr(m_captureProjection));
 
 	// load non-corrected cubemap texture
 	glActiveTexture(GL_TEXTURE0);
@@ -208,7 +173,7 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 			cubemapModelViewMatrixLocation,
 			1,
 			GL_FALSE,
-			glm::value_ptr(captureViews[i]));
+			glm::value_ptr(m_captureViews[i]));
 
 		glFramebufferTexture2D(
 			GL_FRAMEBUFFER,
@@ -226,6 +191,104 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	return envTexture;
+}
+
+GLuint ViewerApplication::computeIrradianceMap(GLuint envCubemap)
+{
+	GLuint irradianceMap;
+	glGenTextures(1, &irradianceMap);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+
+	for (GLuint i = 0; i < 6; ++i)
+	{
+		glTexImage2D(
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			0,
+			GL_RGB16F,
+			IRRADIANCEMAP_SIZE,
+			IRRADIANCEMAP_SIZE,
+			0, 
+			GL_RGB,
+			GL_FLOAT,
+			nullptr);
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// prepare framebuffer to render to texture
+	GLuint captureFBO;
+	GLuint captureRBO;
+	glGenFramebuffers(1, &captureFBO);
+	glGenRenderbuffers(1, &captureRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+
+	glRenderbufferStorage(
+		GL_RENDERBUFFER,
+		GL_DEPTH_COMPONENT24,
+		IRRADIANCEMAP_SIZE,
+		IRRADIANCEMAP_SIZE);
+
+	glFramebufferRenderbuffer(
+		GL_FRAMEBUFFER,
+		GL_DEPTH_ATTACHMENT,
+		GL_RENDERBUFFER,
+		captureRBO);
+
+	// irradiance convolution shader
+	const auto glslIrradianceProgram =
+		compileProgram({
+			m_ShadersRootPath / m_AppName / m_cubemapVertexShader,
+			m_ShadersRootPath / m_AppName / m_irradianceFragmentShader});
+
+	const auto irradianceEnvironmentMapLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uEnvironmentMap");
+	const auto irradianceModelProjMatrixLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uModelProjMatrix");
+	const auto irradianceModelViewMatrixLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uModelViewMatrix");
+
+	glslIrradianceProgram.use();
+	glUniform1i(irradianceEnvironmentMapLocation, 0);
+	glUniformMatrix4fv(
+		irradianceModelProjMatrixLocation,
+		1,
+		GL_FALSE,
+		glm::value_ptr(m_captureProjection));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+
+	glViewport(0, 0, IRRADIANCEMAP_SIZE, IRRADIANCEMAP_SIZE);
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+
+	for (unsigned int i = 0; i < 6; ++i)
+	{
+		glUniformMatrix4fv(
+			irradianceModelViewMatrixLocation,
+			1,
+			GL_FALSE,
+			glm::value_ptr(m_captureViews[i]));
+
+		glFramebufferTexture2D(
+			GL_FRAMEBUFFER,
+			GL_COLOR_ATTACHMENT0, 
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			irradianceMap,
+			0);
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		renderCube();
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return irradianceMap;
 }
 
 std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model& model)
@@ -676,6 +739,7 @@ int ViewerApplication::run()
   // Cubemap
   initCube();
   GLuint envTexture = loadCorrectedEnvTexture();
+  GLuint irradianceMap = computeIrradianceMap(envTexture);
 
   // Reset
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -830,7 +894,7 @@ int ViewerApplication::run()
 
 			glBindTexture(
 				GL_TEXTURE_CUBE_MAP,
-				envTexture);
+				irradianceMap);
 
 			glUniform1i(skyboxEquirectangularMapLocation, 0);
 

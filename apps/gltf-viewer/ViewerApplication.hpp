@@ -46,11 +46,52 @@ private:
   fs::path m_cubeMapFilePath;
   std::string m_cubemapVertexShader = "cubemap.vs.glsl";
   std::string m_cubemapFragmentShader = "cubemap.fs.glsl";
+  std::string m_irradianceFragmentShader = "irradiance.fs.glsl";
   std::string m_skyboxVertexShader = "skybox.vs.glsl";
   std::string m_skyboxFragmentShader = "skybox.fs.glsl";
 
   bool m_hasUserCamera = false;
   Camera m_userCamera;
+
+  glm::mat4 m_captureProjection =
+	  glm::perspective(
+		  glm::radians(90.0f),
+		  1.0f,
+		  0.1f,
+		  10.0f);
+
+  glm::mat4 m_captureViews[6] = 
+  {
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3( 1.0f,  0.0f,  0.0f),
+		  glm::vec3(0.0f, -1.0f,  0.0f)),
+
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3(-1.0f,  0.0f,  0.0f),
+		  glm::vec3(0.0f, -1.0f,  0.0f)),
+
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3( 0.0f,  1.0f,  0.0f),
+		  glm::vec3(0.0f,  0.0f,  1.0f)),
+
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3( 0.0f, -1.0f,  0.0f),
+		  glm::vec3(0.0f,  0.0f, -1.0f)),
+
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3( 0.0f,  0.0f,  1.0f),
+		  glm::vec3(0.0f, -1.0f,  0.0f)),
+
+	  glm::lookAt(
+		  glm::vec3(0.0f, 0.0f, 0.0f),
+		  glm::vec3( 0.0f,  0.0f, -1.0f),
+		  glm::vec3(0.0f, -1.0f,  0.0f))
+  };
 
   fs::path m_OutputPath;
 
@@ -78,6 +119,7 @@ private:
 
   GLuint loadEnvTexture();
   GLuint loadCorrectedEnvTexture();
+  GLuint computeIrradianceMap(GLuint envCubemap);
 
   std::vector<GLuint> createBufferObjects(
 	  const tinygltf::Model& model);
