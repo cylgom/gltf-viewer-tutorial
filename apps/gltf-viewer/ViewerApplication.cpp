@@ -48,6 +48,185 @@ bool ViewerApplication::loadGltfFile(tinygltf::Model& model)
 	return ret;
 }
 
+GLuint ViewerApplication::loadEnvTexture()
+{
+	GLuint envTexture = 0;
+
+	if (!m_cubeMapFilePath.string().empty())
+	{
+		stbi_set_flip_vertically_on_load(true);
+
+		int components;
+		int width;
+		int height;
+
+		float *data = stbi_loadf(
+			m_cubeMapFilePath.c_str(),
+			&width,
+			&height,
+			&components,
+			0);
+
+		if (data)
+		{
+			glGenTextures(1, &envTexture);
+			glBindTexture(GL_TEXTURE_2D, envTexture);
+
+			glTexImage2D(
+				GL_TEXTURE_2D,
+				0,
+				GL_RGB16F,
+				width,
+				height,
+				0,
+				GL_RGB,
+				GL_FLOAT,
+				data);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			stbi_image_free(data);
+		}
+		else
+		{
+			std::cerr << "Failed to load cubemap" << std::endl;
+		}
+	}
+
+	return envTexture;
+}
+
+GLuint ViewerApplication::loadCorrectedEnvTexture()
+{
+	// prepare framebuffer to render to texture
+	GLuint captureFBO;
+	GLuint captureRBO;
+	glGenFramebuffers(1, &captureFBO);
+	glGenRenderbuffers(1, &captureRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
+
+	// prepare output texture
+	GLuint envTexture;
+	glGenTextures(1, &envTexture);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, envTexture);
+
+	for (GLuint i = 0; i < 6; ++i)
+	{
+		glTexImage2D(
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			0,
+			GL_RGB16F,
+			512,
+			512,
+			0,
+			GL_RGB,
+			GL_FLOAT,
+			nullptr);
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// prepare camera positions for texture rendering
+	glm::mat4 captureProjection = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f);
+
+	glm::mat4 captureViews[] = 
+	{
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3( 1.0f,  0.0f,  0.0f),
+			glm::vec3(0.0f, -1.0f,  0.0f)),
+
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(-1.0f,  0.0f,  0.0f),
+			glm::vec3(0.0f, -1.0f,  0.0f)),
+
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3( 0.0f,  1.0f,  0.0f),
+			glm::vec3(0.0f,  0.0f,  1.0f)),
+
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3( 0.0f, -1.0f,  0.0f),
+			glm::vec3(0.0f,  0.0f, -1.0f)),
+
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3( 0.0f,  0.0f,  1.0f),
+			glm::vec3(0.0f, -1.0f,  0.0f)),
+
+		glm::lookAt(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3( 0.0f,  0.0f, -1.0f),
+			glm::vec3(0.0f, -1.0f,  0.0f))
+	};
+
+	// cubemap-correction shaders
+	const auto glslCubemapProgram =
+		compileProgram({
+			m_ShadersRootPath / m_AppName / m_cubemapVertexShader,
+			m_ShadersRootPath / m_AppName / m_cubemapFragmentShader});
+
+	const auto cubemapEquirectangularMapLocation =
+		glGetUniformLocation(glslCubemapProgram.glId(), "uEquirectangularMap");
+	const auto cubemapModelProjMatrixLocation =
+		glGetUniformLocation(glslCubemapProgram.glId(), "uModelProjMatrix");
+	const auto cubemapModelViewMatrixLocation =
+		glGetUniformLocation(glslCubemapProgram.glId(), "uModelViewMatrix");
+
+	glslCubemapProgram.use();
+	glUniform1i(cubemapEquirectangularMapLocation, 0);
+	glUniformMatrix4fv(
+		cubemapModelProjMatrixLocation,
+		1,
+		GL_FALSE,
+		glm::value_ptr(captureProjection));
+
+	// load non-corrected cubemap texture
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, loadEnvTexture());
+
+	// render corrected cubemap texture
+	glViewport(0, 0, 512, 512);
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+
+	for (unsigned int i = 0; i < 6; ++i)
+	{
+		glUniformMatrix4fv(
+			cubemapModelViewMatrixLocation,
+			1,
+			GL_FALSE,
+			glm::value_ptr(captureViews[i]));
+
+		glFramebufferTexture2D(
+			GL_FRAMEBUFFER,
+			GL_COLOR_ATTACHMENT0, 
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			envTexture,
+			0);
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		renderCube();
+	}
+
+	// restore framebuffer state
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return envTexture;
+}
+
 std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model& model)
 {
 	size_t len = model.buffers.size();
@@ -69,6 +248,105 @@ std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	return bo;
+}
+
+void ViewerApplication::initCube()
+{
+	float vertices[] =
+	{
+		// back face
+		-1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+		 1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+		 1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
+		 1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
+		-1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
+		-1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
+		// front face
+		-1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+		 1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
+		 1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+		 1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
+		-1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
+		-1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
+		// left face
+		-1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+		-1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
+		-1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+		-1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
+		-1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+		-1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
+		// right face
+		 1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+		 1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+		 1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
+		 1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
+		 1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
+		 1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
+		// bottom face
+		-1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+		 1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
+		 1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+		 1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
+		-1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
+		-1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
+		// top face
+		-1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+		 1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+		 1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
+		 1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
+		-1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
+		-1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left        
+	};
+
+	glGenVertexArrays(1, &m_unitCubeVAO);
+	glGenBuffers(1, &m_unitCubeVBO);
+
+	glBindBuffer(
+		GL_ARRAY_BUFFER,
+		m_unitCubeVBO);
+	glBufferData(
+		GL_ARRAY_BUFFER,
+		sizeof (vertices),
+		vertices,
+		GL_STATIC_DRAW);
+
+	glBindVertexArray(m_unitCubeVAO);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(
+		0,
+		3,
+		GL_FLOAT,
+		GL_FALSE,
+		8 * sizeof (float),
+		(void*) 0);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(
+		1,
+		3,
+		GL_FLOAT,
+		GL_FALSE,
+		8 * sizeof (float),
+		(void*) (3 * sizeof (float)));
+
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(
+		2,
+		2,
+		GL_FLOAT,
+		GL_FALSE,
+		8 * sizeof (float),
+		(void*) (6 * sizeof (float)));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+
+void ViewerApplication::renderCube()
+{
+    glBindVertexArray(m_unitCubeVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
 }
 
 void vao_init(
@@ -251,7 +529,8 @@ int ViewerApplication::run()
 {
   // Loader shaders
   const auto glslProgram =
-      compileProgram({m_ShadersRootPath / m_AppName / m_vertexShader,
+      compileProgram({
+		  m_ShadersRootPath / m_AppName / m_vertexShader,
           m_ShadersRootPath / m_AppName / m_fragmentShader});
 
   const auto modelViewProjMatrixLocation =
@@ -290,6 +569,19 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uNormalTexture");
   const auto normalScaleLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalScale");
+
+  // Skybox
+  const auto glslSkyboxProgram =
+      compileProgram({
+		  m_ShadersRootPath / m_AppName / m_skyboxVertexShader,
+          m_ShadersRootPath / m_AppName / m_skyboxFragmentShader});
+
+  const auto skyboxEquirectangularMapLocation =
+      glGetUniformLocation(glslSkyboxProgram.glId(), "uEquirectangularMap");
+  const auto skyboxModelProjMatrixLocation =
+      glGetUniformLocation(glslSkyboxProgram.glId(), "uModelProjMatrix");
+  const auto skyboxModelViewMatrixLocation =
+      glGetUniformLocation(glslSkyboxProgram.glId(), "uModelViewMatrix");
 
   // TODO Loading the glTF file
   tinygltf::Model model;
@@ -381,51 +673,8 @@ int ViewerApplication::run()
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
 
   // Cubemap
-  if (!m_cubeMapFilePath.string().empty())
-  {
-	  stbi_set_flip_vertically_on_load(true);
-
-	  GLuint cubeTexture;
-	  int cubeComponents;
-	  int cubeWidth;
-	  int cubeHeight;
-
-	  float *cubeData = stbi_loadf(
-		m_cubeMapFilePath.c_str(),
-		&cubeWidth,
-		&cubeHeight,
-		&cubeComponents,
-		0);
-
-	  if (cubeData)
-	  {
-		glGenTextures(1, &cubeTexture);
-		glBindTexture(GL_TEXTURE_2D, cubeTexture);
-
-		glTexImage2D(
-			GL_TEXTURE_2D,
-			0,
-			GL_RGB16F,
-			cubeWidth,
-			cubeHeight,
-			0,
-			GL_RGB,
-			GL_FLOAT,
-			cubeData);
-
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		stbi_image_free(cubeData);
-	  }
-	  else
-	  {
-		std::cerr << "Failed to load cubemap" << std::endl;
-
-		return -1;
-	  }
-  }
+  initCube();
+  GLuint envTexture = loadCorrectedEnvTexture();
 
   // Reset
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -443,7 +692,7 @@ int ViewerApplication::run()
 
   // Setup OpenGL state for rendering
   glEnable(GL_DEPTH_TEST);
-  glslProgram.use();
+  glDepthFunc(GL_LEQUAL);
 
 	const auto bindMaterial = [&](const auto materialIndex)
 	{
@@ -573,6 +822,32 @@ int ViewerApplication::run()
 
 		const auto viewMatrix = camera.getViewMatrix();
 
+		// Environment skybox
+		const auto drawSkybox = [&]()
+		{
+			glActiveTexture(GL_TEXTURE0);
+
+			glBindTexture(
+				GL_TEXTURE_CUBE_MAP,
+				envTexture);
+
+			glUniform1i(skyboxEquirectangularMapLocation, 0);
+
+			glUniformMatrix4fv(
+				skyboxModelProjMatrixLocation,
+				1,
+				GL_FALSE,
+				glm::value_ptr(projMatrix));
+
+			glUniformMatrix4fv(
+				skyboxModelViewMatrixLocation,
+				1,
+				GL_FALSE,
+				glm::value_ptr(viewMatrix));
+
+			renderCube();
+		};
+
 		// The recursive function that should draw a node
 		// We use a std::function because a simple lambda cannot be recursive
 		const std::function<void(int, const glm::mat4 &)> drawNode =
@@ -652,7 +927,13 @@ int ViewerApplication::run()
 		// Draw the scene referenced by gltf file
 		if (model.defaultScene >= 0)
 		{
+			// Draw skybox
+			glslSkyboxProgram.use();
+			drawSkybox();
+
 			// Draw all nodes
+			glslProgram.use();
+
 			for (size_t i = 0; i < model.scenes[model.defaultScene].nodes.size(); ++i)
 			{
 				drawNode(model.scenes[model.defaultScene].nodes[i], glm::mat4(1));

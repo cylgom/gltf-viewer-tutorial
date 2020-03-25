@@ -32,16 +32,22 @@ private:
 
   GLsizei m_nWindowWidth = 1280;
   GLsizei m_nWindowHeight = 720;
+  GLuint m_unitCubeVAO = 0;
+  GLuint m_unitCubeVBO = 0;
 
   const fs::path m_AppPath;
   const std::string m_AppName;
   const fs::path m_ShadersRootPath;
 
   fs::path m_gltfFilePath;
-  fs::path m_cubeMapFilePath;
   std::string m_vertexShader = "forward.vs.glsl";
   std::string m_fragmentShader = "pbr_directional_light.fs.glsl";
-  // default: diffuse_directional_light.fs.glsl
+
+  fs::path m_cubeMapFilePath;
+  std::string m_cubemapVertexShader = "cubemap.vs.glsl";
+  std::string m_cubemapFragmentShader = "cubemap.fs.glsl";
+  std::string m_skyboxVertexShader = "skybox.vs.glsl";
+  std::string m_skyboxFragmentShader = "skybox.fs.glsl";
 
   bool m_hasUserCamera = false;
   Camera m_userCamera;
@@ -69,12 +75,21 @@ private:
   tinygltf::TinyGLTF m_gltfLoader;
 
   bool loadGltfFile(tinygltf::Model& model);
+
+  GLuint loadEnvTexture();
+  GLuint loadCorrectedEnvTexture();
+
   std::vector<GLuint> createBufferObjects(
 	  const tinygltf::Model& model);
+
   std::vector<GLuint> createVertexArrayObjects(
 	  const tinygltf::Model& model,
 	  const std::vector<GLuint>& bufferObjects,
 	  std::vector<VaoRange>& meshIndexToVaoRange);
+
   std::vector<GLuint> createTextureObjects(
 	  const tinygltf::Model &model) const;
+
+  void initCube();
+  void renderCube();
 };
