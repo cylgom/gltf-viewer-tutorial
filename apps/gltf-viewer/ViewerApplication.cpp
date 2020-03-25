@@ -12,6 +12,7 @@
 #include "utils/gltf.hpp"
 #include "utils/images.hpp"
 
+#include <stb_image.h>
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
 
@@ -378,6 +379,55 @@ int ViewerApplication::run()
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+  // Cubemap
+  if (!m_cubeMapFilePath.string().empty())
+  {
+	  stbi_set_flip_vertically_on_load(true);
+
+	  GLuint cubeTexture;
+	  int cubeComponents;
+	  int cubeWidth;
+	  int cubeHeight;
+
+	  float *cubeData = stbi_loadf(
+		m_cubeMapFilePath.c_str(),
+		&cubeWidth,
+		&cubeHeight,
+		&cubeComponents,
+		0);
+
+	  if (cubeData)
+	  {
+		glGenTextures(1, &cubeTexture);
+		glBindTexture(GL_TEXTURE_2D, cubeTexture);
+
+		glTexImage2D(
+			GL_TEXTURE_2D,
+			0,
+			GL_RGB16F,
+			cubeWidth,
+			cubeHeight,
+			0,
+			GL_RGB,
+			GL_FLOAT,
+			cubeData);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		stbi_image_free(cubeData);
+	  }
+	  else
+	  {
+		std::cerr << "Failed to load cubemap" << std::endl;
+
+		return -1;
+	  }
+  }
+
+  // Reset
   glBindTexture(GL_TEXTURE_2D, 0);
 
   // Creation of Buffer Objects
@@ -743,7 +793,7 @@ int ViewerApplication::run()
 }
 
 ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
-    uint32_t height, const fs::path &gltfFile,
+    uint32_t height, const fs::path &gltfFile, const fs::path &cubeMapFile,
     const std::vector<float> &lookatArgs, const std::string &vertexShader,
     const std::string &fragmentShader, const fs::path &output) :
     m_nWindowWidth(width),
@@ -753,6 +803,7 @@ ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
     m_ImGuiIniFilename{m_AppName + ".imgui.ini"},
     m_ShadersRootPath{m_AppPath.parent_path() / "shaders"},
     m_gltfFilePath{gltfFile},
+    m_cubeMapFilePath{cubeMapFile},
     m_OutputPath{output}
 {
   if (!lookatArgs.empty()) {

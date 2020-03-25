@@ -14,6 +14,7 @@ public:
 	  uint32_t width,
 	  uint32_t height,
       const fs::path &gltfFile,
+      const fs::path &cubeMapFile,
 	  const std::vector<float> &lookatArgs,
       const std::string &vertexShader,
 	  const std::string &fragmentShader,
@@ -37,6 +38,7 @@ private:
   const fs::path m_ShadersRootPath;
 
   fs::path m_gltfFilePath;
+  fs::path m_cubeMapFilePath;
   std::string m_vertexShader = "forward.vs.glsl";
   std::string m_fragmentShader = "pbr_directional_light.fs.glsl";
   // default: diffuse_directional_light.fs.glsl

@@ -25,6 +25,8 @@ int main(int argc, char **argv)
       commands, "viewer", "Run glTF viewer", [&](args::Subparser &parser) {
         args::Positional<std::string> file{
             parser, "file", "Path to file", args::Options::Required};
+        args::Positional<std::string> cube{
+            parser, "cube", "Path to cubemap file"};
         args::ValueFlag<std::string> lookat{parser, "lookat",
             "Look at parameters for the Camera with format "
             "eye_x,eye_y,eye_z,center_x,center_y,center_z,up_x,up_y,up_z",
@@ -62,7 +64,7 @@ int main(int argc, char **argv)
         uint32_t width = imageWidth ? args::get(imageWidth) : 1280;
         uint32_t height = imageHeight ? args::get(imageHeight) : 720;
 
-        ViewerApplication app{fs::path{argv[0]}, width, height, args::get(file),
+        ViewerApplication app{fs::path{argv[0]}, width, height, args::get(file), args::get(cube),
             lookatParams, args::get(vertexShader), args::get(fragmentShader),
             args::get(output)};
         returnCode = app.run();
