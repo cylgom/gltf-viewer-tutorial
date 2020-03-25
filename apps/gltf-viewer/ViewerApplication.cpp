@@ -634,6 +634,9 @@ int ViewerApplication::run()
   const auto normalScaleLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalScale");
 
+  const auto irradianceTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uIrradianceMap");
+
   // Skybox
   const auto glslSkyboxProgram =
       compileProgram({
@@ -851,6 +854,13 @@ int ViewerApplication::run()
 					normalScaleLocation,
 					normalTexture.scale);
 
+				// irradiance map
+				glActiveTexture(GL_TEXTURE5);
+				glBindTexture(
+					GL_TEXTURE_CUBE_MAP,
+					irradianceMap);
+				glUniform1i(irradianceTextureLocation, 5);
+
 				return;
 			}
 		}
@@ -894,7 +904,7 @@ int ViewerApplication::run()
 
 			glBindTexture(
 				GL_TEXTURE_CUBE_MAP,
-				irradianceMap);
+				envTexture);
 
 			glUniform1i(skyboxEquirectangularMapLocation, 0);
 

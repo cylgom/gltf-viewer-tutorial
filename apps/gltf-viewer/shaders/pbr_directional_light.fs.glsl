@@ -23,6 +23,8 @@ uniform sampler2D uOcclusionTexture;
 uniform float uNormalScale;
 uniform sampler2D uNormalTexture;
 
+uniform samplerCube uIrradianceMap;
+
 out vec3 fColor;
 
 // Constants
@@ -145,14 +147,16 @@ void main()
 
   // variables
   vec3 F0 = mix(dielectricSpecular, baseColor.rgb, metallic);
-  vec3 F = F0 + (1 - F0) * VdotH_p5;
+  // modified fresnel for irradiance accounting
+  vec3 F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * VdotH_p5; //vec3 F = F0 + (1 - F0) * VdotH_p5;
   float D = a_sq * M_1_PI * pow((NdotH * NdotH) * (a_sq - 1) + 1, -2);
+  vec3 irradiance = texture(uIrradianceMap, N).rgb;
 
   // diffuse
   vec3 diffuse = mix(
 	  baseColor.rgb * (1 - dielectricSpecular.r),
 	  black,
-	  metallic) * M_1_PI;
+	  metallic) * M_1_PI * irradiance;
 
   // components
   vec3 f_diffuse = (1 - F) * diffuse;
