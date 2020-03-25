@@ -19,6 +19,7 @@
 #define VERTEX_ATTRIB_POSITION_IDX 0
 #define VERTEX_ATTRIB_NORMAL_IDX 1
 #define VERTEX_ATTRIB_TEXCOORD0_IDX 2
+#define SKYBOX_SIZE 512
 
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -108,7 +109,7 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 
 	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
 	glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, SKYBOX_SIZE, SKYBOX_SIZE);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO);
 
 	// prepare output texture
@@ -122,8 +123,8 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
 			0,
 			GL_RGB16F,
-			512,
-			512,
+			SKYBOX_SIZE,
+			SKYBOX_SIZE,
 			0,
 			GL_RGB,
 			GL_FLOAT,
@@ -198,7 +199,7 @@ GLuint ViewerApplication::loadCorrectedEnvTexture()
 	glBindTexture(GL_TEXTURE_2D, loadEnvTexture());
 
 	// render corrected cubemap texture
-	glViewport(0, 0, 512, 512);
+	glViewport(0, 0, SKYBOX_SIZE, SKYBOX_SIZE);
 	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
 
 	for (unsigned int i = 0; i < 6; ++i)
