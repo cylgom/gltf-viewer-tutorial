@@ -1030,7 +1030,7 @@ int ViewerApplication::run()
 
 			glBindTexture(
 				GL_TEXTURE_CUBE_MAP,
-				prefilterMap);// envTexture);
+				envTexture);
 
 			glUniform1i(skyboxEquirectangularMapLocation, 0);
 
