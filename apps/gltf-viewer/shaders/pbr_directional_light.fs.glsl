@@ -24,6 +24,8 @@ uniform float uNormalScale;
 uniform sampler2D uNormalTexture;
 
 uniform samplerCube uIrradianceMap;
+uniform samplerCube uPrefilterMap;
+uniform sampler2D uBrdfLUT;
 
 out vec3 fColor;
 
@@ -151,6 +153,12 @@ void main()
   vec3 F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * VdotH_p5; //vec3 F = F0 + (1 - F0) * VdotH_p5;
   float D = a_sq * M_1_PI * pow((NdotH * NdotH) * (a_sq - 1) + 1, -2);
   vec3 irradiance = texture(uIrradianceMap, N).rgb;
+  // IBL
+  const float MAX_REFLECTION_LOD = 4.0f;
+  vec3 R = reflect(-V, N);
+  vec3 prefilteredColor = textureLod(uPrefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+  vec2 envBRDF = texture(uBrdfLUT, vec2(NdotV, roughness)).rg;
+  vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
   // diffuse
   vec3 diffuse = mix(
@@ -160,7 +168,7 @@ void main()
 
   // components
   vec3 f_diffuse = (1 - F) * diffuse;
-  vec3 f_specular = F * Vis * D;
+  vec3 f_specular = (F * Vis * D) + specular;
 
   // done
   vec3 unoc_color = (f_diffuse + f_specular) * uLightIntensity * NdotL;

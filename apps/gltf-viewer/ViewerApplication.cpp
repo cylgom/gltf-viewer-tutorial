@@ -22,6 +22,7 @@
 #define SKYBOX_SIZE 512
 #define IRRADIANCEMAP_SIZE 32
 #define PREFILTERMAP_SIZE 128
+#define BRDF_LUT_SIZE 512
 
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -414,6 +415,65 @@ GLuint ViewerApplication::prefilterEnvironmentMap(GLuint envCubemap)
 	return prefilterMap;
 }
 
+GLuint ViewerApplication::integrateBRDF()
+{
+	GLuint brdfLUTTexture;
+	glGenTextures(1, &brdfLUTTexture);
+
+	glBindTexture(GL_TEXTURE_2D, brdfLUTTexture);
+
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		GL_RG16F,
+		BRDF_LUT_SIZE,
+		BRDF_LUT_SIZE,
+		0,
+		GL_RG,
+		GL_FLOAT,
+		0);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	GLuint captureFBO;
+	GLuint captureRBO;
+	glGenFramebuffers(1, &captureFBO);
+	glGenRenderbuffers(1, &captureRBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+
+	glRenderbufferStorage(
+		GL_RENDERBUFFER,
+		GL_DEPTH_COMPONENT24,
+		BRDF_LUT_SIZE,
+		BRDF_LUT_SIZE);
+
+	glFramebufferTexture2D(
+		GL_FRAMEBUFFER,
+		GL_COLOR_ATTACHMENT0,
+		GL_TEXTURE_2D,
+		brdfLUTTexture,
+		0);
+
+	glViewport(0, 0, BRDF_LUT_SIZE, BRDF_LUT_SIZE);
+
+	const auto glslIntegrateProgram =
+		compileProgram({
+			m_ShadersRootPath / m_AppName / m_integrateVertexShader,
+			m_ShadersRootPath / m_AppName / m_integrateFragmentShader});
+
+	glslIntegrateProgram.use();
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	renderQuad();
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return brdfLUTTexture;
+}
+
 std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model& model)
 {
 	size_t len = model.buffers.size();
@@ -533,6 +593,34 @@ void ViewerApplication::renderCube()
 {
     glBindVertexArray(m_unitCubeVAO);
     glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+}
+
+void ViewerApplication::initQuad()
+{
+	float quadVertices[] =
+	{
+		-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+		-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+		 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+		 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+	};
+
+	glGenVertexArrays(1, &m_quadVAO);
+	glGenBuffers(1, &m_quadVBO);
+	glBindVertexArray(m_quadVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof (quadVertices), &quadVertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof (float), (void*) 0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof (float), (void*) (3 * (sizeof (float))));
+}
+
+void ViewerApplication::renderQuad()
+{
+    glBindVertexArray(m_quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glBindVertexArray(0);
 }
 
@@ -761,6 +849,10 @@ int ViewerApplication::run()
 
   const auto irradianceTextureLocation =
       glGetUniformLocation(glslProgram.glId(), "uIrradianceMap");
+  const auto prefilterTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uPrefilterMap");
+  const auto brdfLUTLocation =
+      glGetUniformLocation(glslProgram.glId(), "uBrdfLUT");
 
   // Skybox
   const auto glslSkyboxProgram =
@@ -865,6 +957,8 @@ int ViewerApplication::run()
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
 
   // Cubemap
+  initQuad();
+  GLuint brdfLUT = integrateBRDF();
   initCube();
   GLuint envTexture = loadCorrectedEnvTexture();
   GLuint irradianceMap = computeIrradianceMap(envTexture);
@@ -986,6 +1080,20 @@ int ViewerApplication::run()
 					GL_TEXTURE_CUBE_MAP,
 					irradianceMap);
 				glUniform1i(irradianceTextureLocation, 5);
+
+				// prefilter map
+				glActiveTexture(GL_TEXTURE6);
+				glBindTexture(
+					GL_TEXTURE_CUBE_MAP,
+					prefilterMap);
+				glUniform1i(prefilterTextureLocation, 6);
+
+				// irradiance map
+				glActiveTexture(GL_TEXTURE7);
+				glBindTexture(
+					GL_TEXTURE_2D,
+					brdfLUT);
+				glUniform1i(brdfLUTLocation, 7);
 
 				return;
 			}

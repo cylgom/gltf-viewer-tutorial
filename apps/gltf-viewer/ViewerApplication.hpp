@@ -34,6 +34,8 @@ private:
   GLsizei m_nWindowHeight = 720;
   GLuint m_unitCubeVAO = 0;
   GLuint m_unitCubeVBO = 0;
+  GLuint m_quadVAO = 0;
+  GLuint m_quadVBO = 0;
 
   const fs::path m_AppPath;
   const std::string m_AppName;
@@ -50,6 +52,8 @@ private:
   std::string m_prefilterFragmentShader = "prefilter.fs.glsl";
   std::string m_skyboxVertexShader = "skybox.vs.glsl";
   std::string m_skyboxFragmentShader = "skybox.fs.glsl";
+  std::string m_integrateVertexShader = "integrate.vs.glsl";
+  std::string m_integrateFragmentShader = "integrate.fs.glsl";
 
   bool m_hasUserCamera = false;
   Camera m_userCamera;
@@ -122,6 +126,7 @@ private:
   GLuint loadCorrectedEnvTexture();
   GLuint computeIrradianceMap(GLuint envCubemap);
   GLuint prefilterEnvironmentMap(GLuint envCubemap);
+  GLuint integrateBRDF();
 
   std::vector<GLuint> createBufferObjects(
 	  const tinygltf::Model& model);
@@ -136,4 +141,6 @@ private:
 
   void initCube();
   void renderCube();
+  void initQuad();
+  void renderQuad();
 };
