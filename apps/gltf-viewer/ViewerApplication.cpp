@@ -21,6 +21,7 @@
 #define VERTEX_ATTRIB_TEXCOORD0_IDX 2
 #define SKYBOX_SIZE 512
 #define IRRADIANCEMAP_SIZE 32
+#define PREFILTERMAP_SIZE 128
 
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -289,6 +290,128 @@ GLuint ViewerApplication::computeIrradianceMap(GLuint envCubemap)
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	return irradianceMap;
+}
+
+GLuint ViewerApplication::prefilterEnvironmentMap(GLuint envCubemap)
+{
+	GLuint prefilterMap;
+	glGenTextures(1, &prefilterMap);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, prefilterMap);
+
+	for (GLuint i = 0; i < 6; ++i)
+	{
+		glTexImage2D(
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			0,
+			GL_RGB16F,
+			PREFILTERMAP_SIZE,
+			PREFILTERMAP_SIZE,
+			0,
+			GL_RGB,
+			GL_FLOAT,
+			nullptr);
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// this is how we tell opengl to render to mipmaps too
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); 
+
+	// automatic allocation
+	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+	// prepare framebuffer to render to texture
+	GLuint captureFBO;
+	GLuint captureRBO;
+	glGenFramebuffers(1, &captureFBO);
+	glGenRenderbuffers(1, &captureRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+
+	glRenderbufferStorage(
+		GL_RENDERBUFFER,
+		GL_DEPTH_COMPONENT24,
+		PREFILTERMAP_SIZE,
+		PREFILTERMAP_SIZE);
+
+	glFramebufferRenderbuffer(
+		GL_FRAMEBUFFER,
+		GL_DEPTH_ATTACHMENT,
+		GL_RENDERBUFFER,
+		captureRBO);
+
+	// pre-filtering shader
+	const auto glslIrradianceProgram =
+		compileProgram({
+			m_ShadersRootPath / m_AppName / m_cubemapVertexShader,
+			m_ShadersRootPath / m_AppName / m_prefilterFragmentShader});
+
+	const auto prefilterEnvironmentMapLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uEnvironmentMap");
+	const auto prefilterModelProjMatrixLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uModelProjMatrix");
+	const auto prefilterModelViewMatrixLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uModelViewMatrix");
+	const auto prefilterRoughnessLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uRoughness");
+	const auto prefilterResolutionLocation =
+		glGetUniformLocation(glslIrradianceProgram.glId(), "uResolution");
+
+	glslIrradianceProgram.use();
+	glUniform1i(prefilterEnvironmentMapLocation, 0);
+	glUniform1f(prefilterResolutionLocation, SKYBOX_SIZE);
+	glUniformMatrix4fv(
+		prefilterModelProjMatrixLocation,
+		1,
+		GL_FALSE,
+		glm::value_ptr(m_captureProjection));
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, envCubemap);
+	glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+
+	GLuint maxMipLevels = 5;
+
+	for (GLuint mip = 0; mip < maxMipLevels; ++mip)
+	{
+		GLuint mipWidth = PREFILTERMAP_SIZE * std::pow(0.5, mip);
+		GLuint mipHeight = PREFILTERMAP_SIZE * std::pow(0.5, mip);
+
+		glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+		glViewport(0, 0, mipWidth, mipHeight);
+
+		glUniform1f(
+			prefilterRoughnessLocation,
+			(float) mip / (float) (maxMipLevels - 1));
+
+		for (GLuint i = 0; i < 6; ++i)
+		{
+			glUniformMatrix4fv(
+				prefilterModelViewMatrixLocation,
+				1,
+				GL_FALSE,
+				glm::value_ptr(m_captureViews[i]));
+
+			glFramebufferTexture2D(
+				GL_FRAMEBUFFER,
+				GL_COLOR_ATTACHMENT0, 
+				GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+				prefilterMap,
+				mip);
+
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			renderCube();
+		}
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	return prefilterMap;
 }
 
 std::vector<GLuint> ViewerApplication::createBufferObjects(const tinygltf::Model& model)
@@ -591,6 +714,8 @@ std::vector<GLuint> ViewerApplication::createTextureObjects(const tinygltf::Mode
 
 int ViewerApplication::run()
 {
+  glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
   // Loader shaders
   const auto glslProgram =
       compileProgram({
@@ -743,6 +868,7 @@ int ViewerApplication::run()
   initCube();
   GLuint envTexture = loadCorrectedEnvTexture();
   GLuint irradianceMap = computeIrradianceMap(envTexture);
+  GLuint prefilterMap = prefilterEnvironmentMap(envTexture);
 
   // Reset
   glBindTexture(GL_TEXTURE_2D, 0);
@@ -904,7 +1030,7 @@ int ViewerApplication::run()
 
 			glBindTexture(
 				GL_TEXTURE_CUBE_MAP,
-				envTexture);
+				prefilterMap);// envTexture);
 
 			glUniform1i(skyboxEquirectangularMapLocation, 0);
 

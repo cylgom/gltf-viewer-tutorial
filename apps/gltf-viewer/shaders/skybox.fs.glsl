@@ -8,7 +8,7 @@ out vec4 fColor;
   
 void main()
 {
-    vec3 envColor = texture(uEnvironmentMap, vViewSpacePosition).rgb;
+    vec3 envColor = textureLod(uEnvironmentMap, vViewSpacePosition, 1.2f).rgb;
     
     envColor = envColor / (envColor + vec3(1.0));
     envColor = pow(envColor, vec3(1.0/2.2)); 

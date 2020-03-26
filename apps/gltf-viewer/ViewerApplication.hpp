@@ -47,6 +47,7 @@ private:
   std::string m_cubemapVertexShader = "cubemap.vs.glsl";
   std::string m_cubemapFragmentShader = "cubemap.fs.glsl";
   std::string m_irradianceFragmentShader = "irradiance.fs.glsl";
+  std::string m_prefilterFragmentShader = "prefilter.fs.glsl";
   std::string m_skyboxVertexShader = "skybox.vs.glsl";
   std::string m_skyboxFragmentShader = "skybox.fs.glsl";
 
@@ -120,6 +121,7 @@ private:
   GLuint loadEnvTexture();
   GLuint loadCorrectedEnvTexture();
   GLuint computeIrradianceMap(GLuint envCubemap);
+  GLuint prefilterEnvironmentMap(GLuint envCubemap);
 
   std::vector<GLuint> createBufferObjects(
 	  const tinygltf::Model& model);
