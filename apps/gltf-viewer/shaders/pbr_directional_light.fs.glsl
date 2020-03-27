@@ -155,7 +155,7 @@ void main()
   vec3 irradiance = texture(uIrradianceMap, N).rgb;
   // IBL
   const float MAX_REFLECTION_LOD = 4.0f;
-  vec3 R = reflect(-V, H);
+  vec3 R = reflect(vViewSpacePosition, vViewSpaceNormal);
   vec3 prefilteredColor = textureLod(uPrefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
   vec2 envBRDF = texture(uBrdfLUT, vec2(VdotH, roughness)).rg;
   vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
