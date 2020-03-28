@@ -1053,10 +1053,17 @@ int ViewerApplication::run()
 					emissiveFactor[2]);
 
 				// occlusion
+				GLuint occlusion = textureObjects[occlusionTexture.index];
+
+				if (occlusion == 0)
+				{
+					occlusion = whiteTexture;
+				}
+
 				glActiveTexture(GL_TEXTURE3);
 				glBindTexture(
 					GL_TEXTURE_2D,
-					textureObjects[occlusionTexture.index]);
+					occlusion);
 				glUniform1i(occlusionTextureLocation, 3);
 
 				glUniform1f(
