@@ -3,7 +3,8 @@
 in vec3 vViewSpacePosition;
 in vec3 vViewSpaceNormal;
 in vec2 vTexCoords;
-in vec3 vNormal;
+in vec3 vWorldSpacePosition;
+in vec3 vWorldSpaceNormal;
 
 uniform vec3 uLightDirection;
 uniform vec3 uLightIntensity;
@@ -27,6 +28,9 @@ uniform sampler2D uNormalTexture;
 uniform samplerCube uIrradianceMap;
 uniform samplerCube uPrefilterMap;
 uniform sampler2D uBrdfLUT;
+
+uniform vec3 uCamPos;
+uniform vec3 uCamDir;
 
 out vec3 fColor;
 
@@ -156,7 +160,7 @@ void main()
   vec3 irradiance = texture(uIrradianceMap, N).rgb;
   // IBL
   const float MAX_REFLECTION_LOD = 4.0f;
-  vec3 R = reflect(vViewSpaceNormal + (tbn * N), vNormal);
+  vec3 R = reflect(normalize(vWorldSpacePosition - uCamDir), normalize(vWorldSpaceNormal));
   vec3 prefilteredColor = textureLod(uPrefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
   vec2 envBRDF = texture(uBrdfLUT, vec2(VdotH, roughness)).rg;
   vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);

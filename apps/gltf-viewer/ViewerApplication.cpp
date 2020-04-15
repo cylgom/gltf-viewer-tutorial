@@ -814,6 +814,8 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewProjMatrix");
   const auto modelViewMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
+  const auto modelMatrixLocation =
+      glGetUniformLocation(glslProgram.glId(), "uModelMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
   const auto lightDirectionLocation =
@@ -853,6 +855,11 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uPrefilterMap");
   const auto brdfLUTLocation =
       glGetUniformLocation(glslProgram.glId(), "uBrdfLUT");
+
+  const auto camPosLocation =
+      glGetUniformLocation(glslProgram.glId(), "uCamPos");
+  const auto camDirLocation =
+      glGetUniformLocation(glslProgram.glId(), "uCamDir");
 
   // Skybox
   const auto glslSkyboxProgram =
@@ -1304,9 +1311,13 @@ int ViewerApplication::run()
 					lightDirection = glm::normalize(viewMatrix * glm::vec4(lightDirectionRaw, 0.0f));
 				}
 
+				glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
 				glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
 				glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjectionMatrix));
 				glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+				glUniform3fv(camPosLocation, 1, glm::value_ptr(camera.getPosition()));
+				glUniform3fv(camDirLocation, 1, glm::value_ptr(camera.getDirection()));
 
 				if (lightDirectionLocation >= 0)
 				{

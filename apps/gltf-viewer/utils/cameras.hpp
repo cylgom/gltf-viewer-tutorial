@@ -20,6 +20,8 @@ public:
   };
 
   glm::mat4 getViewMatrix() const { return glm::lookAt(m_eye, m_center, m_up); }
+  glm::vec3 getPosition() const { return m_center; }
+  glm::vec3 getDirection() const { return m_eye; }
 
   void setEye(glm::vec3 eye)
   {
