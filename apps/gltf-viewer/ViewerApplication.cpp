@@ -894,11 +894,17 @@ int ViewerApplication::run()
           0.001f * maxDistance,
 		  1.5f * maxDistance);
 
+  // Config (IMGUI)
   int controlsType = 0;
-  bool lightHeader = false;
   bool lightFromCamera = true;
   float lightAngleH = 1.55f;
   float lightAngleV = 2.0f;
+  bool featureTexture = true;
+  bool featureMetallicRoughness = true;
+  bool featureOcclusion = true;
+  bool featureEmission = true;
+  bool featureNormal = true;
+  bool featureEnvironment = true;
 
   glm::vec3 lightDirectionRaw = glm::vec3(1.0f, 1.0f, 1.0f);
   glm::vec3 lightRadiance = glm::vec3(1.0f, 1.0f, 1.0f);
@@ -933,12 +939,9 @@ int ViewerApplication::run()
   // Physically-Based Materials
   const std::vector<GLuint> textureObjects = createTextureObjects(model);
   GLuint whiteTexture;
-
+  float white[] = {1, 1, 1, 1};
   glGenTextures(1, &whiteTexture);
   glBindTexture(GL_TEXTURE_2D, whiteTexture);
-
-  float white[] = {1, 1, 1, 1};
-
   glTexImage2D(
 	  GL_TEXTURE_2D,
 	  0,
@@ -949,12 +952,36 @@ int ViewerApplication::run()
 	  GL_RGBA,
 	  GL_FLOAT,
 	  white);
-
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+	// dummy cubemap
+	GLuint whiteCube;
+	glGenTextures(1, &whiteCube);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, whiteCube);
+
+	for (GLuint i = 0; i < 6; ++i)
+	{
+		glTexImage2D(
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+			0,
+			GL_RGB16F,
+			1,
+			1,
+			0, 
+			GL_RGB,
+			GL_FLOAT,
+			white);
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   // Cubemap
   initQuad();
@@ -1010,96 +1037,181 @@ int ViewerApplication::run()
 					pbrMetallicRoughness.baseColorTexture.index];
 
 				// base color
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textureObjects[texture.source]);
+				if (featureTexture)
+				{
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						textureObjects[texture.source]);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						whiteTexture);
+				}
+
 				glUniform1i(baseColorLocation, 0);
 
 				// metallic roughness
-				glActiveTexture(GL_TEXTURE1);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textureObjects[
-						pbrMetallicRoughness.metallicRoughnessTexture.index]);
-				glUniform1i(metallicRoughnessTextureLocation, 1);
-				
-				glUniform4f(
-					baseColorFactorLocation,
-					pbrMetallicRoughness.baseColorFactor[0],
-					pbrMetallicRoughness.baseColorFactor[1],
-					pbrMetallicRoughness.baseColorFactor[2],
-					pbrMetallicRoughness.baseColorFactor[3]);
-
-				glUniform1f(
-					metallicFactorLocation,
-					pbrMetallicRoughness.metallicFactor);
-
-				glUniform1f(
-					roughnessFactorLocation,
-					pbrMetallicRoughness.roughnessFactor);
-
-				// emissive
-				glActiveTexture(GL_TEXTURE2);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textureObjects[emissiveTexture.index]);
-				glUniform1i(emissiveTextureLocation, 2);
-
-				glUniform3f(
-					emissiveFactorLocation,
-					emissiveFactor[0],
-					emissiveFactor[1],
-					emissiveFactor[2]);
-
-				// occlusion
-				GLuint occlusion = textureObjects[occlusionTexture.index];
-
-				if (occlusion == 0)
+				if (featureMetallicRoughness)
 				{
-					occlusion = whiteTexture;
+					glActiveTexture(GL_TEXTURE1);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						textureObjects[
+							pbrMetallicRoughness
+								.metallicRoughnessTexture
+								.index]);
+
+					glUniform4f(
+						baseColorFactorLocation,
+						pbrMetallicRoughness.baseColorFactor[0],
+						pbrMetallicRoughness.baseColorFactor[1],
+						pbrMetallicRoughness.baseColorFactor[2],
+						pbrMetallicRoughness.baseColorFactor[3]);
+					glUniform1f(
+						metallicFactorLocation,
+						pbrMetallicRoughness.metallicFactor);
+					glUniform1f(
+						roughnessFactorLocation,
+						pbrMetallicRoughness.roughnessFactor);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE1);
+					glBindTexture(GL_TEXTURE_2D, 0);
+
+					glUniform4f(
+						baseColorFactorLocation,
+						1,
+						1,
+						1,
+						1);
+					glUniform1f(
+						metallicFactorLocation,
+						0);
+					glUniform1f(
+						roughnessFactorLocation,
+						0);
 				}
 
-				glActiveTexture(GL_TEXTURE3);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					occlusion);
+				glUniform1i(metallicRoughnessTextureLocation, 1);
+
+				// emissive
+				if (featureEmission)
+				{
+					glActiveTexture(GL_TEXTURE2);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						textureObjects[emissiveTexture.index]);
+					glUniform3f(
+						emissiveFactorLocation,
+						emissiveFactor[0],
+						emissiveFactor[1],
+						emissiveFactor[2]);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE2);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						0);
+					glUniform3f(
+						emissiveFactorLocation,
+						0,
+						0,
+						0);
+				}
+
+				glUniform1i(emissiveTextureLocation, 2);
+
+				// occlusion
+				if (featureOcclusion)
+				{
+					GLuint occlusion = textureObjects[occlusionTexture.index];
+
+					if (occlusion == 0)
+					{
+						occlusion = whiteTexture;
+					}
+
+					glActiveTexture(GL_TEXTURE3);
+					glBindTexture(GL_TEXTURE_2D, occlusion);
+					glUniform1f(
+						occlusionStrengthLocation,
+						occlusionTexture.strength);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE3);
+					glBindTexture(GL_TEXTURE_2D, whiteTexture);
+					glUniform1f(
+						occlusionStrengthLocation,
+						1);
+				}
+
 				glUniform1i(occlusionTextureLocation, 3);
 
-				glUniform1f(
-					occlusionStrengthLocation,
-					occlusionTexture.strength);
-
 				// normal map
-				glActiveTexture(GL_TEXTURE4);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textureObjects[normalTexture.index]);
+				if (featureNormal)
+				{
+					glActiveTexture(GL_TEXTURE4);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						textureObjects[normalTexture.index]);
+					glUniform1f(
+						normalScaleLocation,
+						normalTexture.scale);
+				}
+				else
+				{
+					glActiveTexture(GL_TEXTURE4);
+					glBindTexture(GL_TEXTURE_2D, whiteTexture);
+					glUniform1f(normalScaleLocation, 1);
+				}
+
 				glUniform1i(normalTextureLocation, 4);
 
-				glUniform1f(
-					normalScaleLocation,
-					normalTexture.scale);
+				// environment map
+				if (featureEnvironment)
+				{
+					// irradiance map
+					glActiveTexture(GL_TEXTURE5);
+					glBindTexture(
+						GL_TEXTURE_CUBE_MAP,
+						irradianceMap);
 
-				// irradiance map
-				glActiveTexture(GL_TEXTURE5);
-				glBindTexture(
-					GL_TEXTURE_CUBE_MAP,
-					irradianceMap);
+					// prefilter map
+					glActiveTexture(GL_TEXTURE6);
+					glBindTexture(
+						GL_TEXTURE_CUBE_MAP,
+						prefilterMap);
+
+					// brdf lut
+					glActiveTexture(GL_TEXTURE7);
+					glBindTexture(
+						GL_TEXTURE_2D,
+						brdfLUT);
+				}
+				else
+				{
+					// irradiance map
+					glActiveTexture(GL_TEXTURE5);
+					glBindTexture(GL_TEXTURE_CUBE_MAP, whiteCube);
+
+					// prefilter map
+					glActiveTexture(GL_TEXTURE6);
+					glBindTexture(GL_TEXTURE_CUBE_MAP, whiteCube);
+
+					// brdf lut
+					glActiveTexture(GL_TEXTURE7);
+					glBindTexture(GL_TEXTURE_2D, 0);
+				}
+
 				glUniform1i(irradianceTextureLocation, 5);
-
-				// prefilter map
-				glActiveTexture(GL_TEXTURE6);
-				glBindTexture(
-					GL_TEXTURE_CUBE_MAP,
-					prefilterMap);
 				glUniform1i(prefilterTextureLocation, 6);
-
-				// irradiance map
-				glActiveTexture(GL_TEXTURE7);
-				glBindTexture(
-					GL_TEXTURE_2D,
-					brdfLUT);
 				glUniform1i(brdfLUTLocation, 7);
 
 				return;
@@ -1350,7 +1462,7 @@ int ViewerApplication::run()
 			cameraController->setCamera(oldCamera);
 		}
 
-		if (ImGui::CollapsingHeader("Light"), &lightHeader)
+		if (ImGui::CollapsingHeader("Light"))
 		{
 			if (ImGui::SliderFloat("Vertical", &lightAngleV, 0.0f, 3.14f)
 			|| ImGui::SliderFloat("Horizontal", &lightAngleH, 0.0f, 6.28f))
@@ -1364,6 +1476,16 @@ int ViewerApplication::run()
 			ImGui::ColorEdit3("Color#lightColor", (float*) &lightRadiance, 0);
 
 			ImGui::Checkbox("Bind to Camera", &lightFromCamera);
+		}
+
+		if (ImGui::CollapsingHeader("features"))
+		{
+			ImGui::Checkbox("Texture", &featureTexture);
+			ImGui::Checkbox("Metallic-Roughness Map", &featureMetallicRoughness);
+			ImGui::Checkbox("Occlusion Map", &featureOcclusion);
+			ImGui::Checkbox("Emission Map", &featureEmission);
+			ImGui::Checkbox("Normal Map", &featureNormal);
+			ImGui::Checkbox("Environment Map", &featureEnvironment);
 		}
       }
 
