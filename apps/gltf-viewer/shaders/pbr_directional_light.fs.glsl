@@ -145,14 +145,14 @@ void main()
     mix(
       baseColor.rgb * (1 - dielectricSpecular.r),
       black,
-      metallic) * M_1_PI;
+      metallic);
 
   // regular point-light fresnel
   float VdotH_p5 = (1 - VdotH);
   VdotH_p5 *= VdotH_p5 * VdotH_p5 * VdotH_p5 * VdotH_p5;
   float D = a_sq * M_1_PI * pow((NdotH * NdotH) * (a_sq - 1) + 1, -2);
   vec3 F = F0 + (1 - F0) * VdotH_p5;
-  vec3 f_diffuse = (1 - F) * diffuse;
+  vec3 f_diffuse = (1 - F) * diffuse * M_1_PI;
   vec3 f_specular = (F * Vis * D);
   vec3 unoc_color =
 	(f_diffuse + f_specular)
@@ -160,7 +160,7 @@ void main()
 	* NdotL;
 
   // modified fresnel for irradiance accounting
-  float NdotV_p5 = (1 - clamp(dot(N, V), 0, 1));
+  float NdotV_p5 = 1 - NdotV;
   NdotV_p5 *= NdotV_p5 * NdotV_p5 * NdotV_p5 * NdotV_p5;
   F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * NdotV_p5;
   vec3 irradiance = texture(uIrradianceMap, N).rgb;
@@ -173,7 +173,7 @@ void main()
   vec2 envBRDF =
     texture(
       uBrdfLUT,
-	  vec2(VdotH, roughness)).rg;
+	  vec2(NdotV, roughness)).rg;
   vec3 specular =
     prefilteredColor
 	* (F * envBRDF.x + envBRDF.y);
