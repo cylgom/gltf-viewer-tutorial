@@ -855,9 +855,6 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uPrefilterMap");
   const auto brdfLUTLocation =
       glGetUniformLocation(glslProgram.glId(), "uBrdfLUT");
-
-  const auto camPosLocation =
-      glGetUniformLocation(glslProgram.glId(), "uCamPos");
   const auto camDirLocation =
       glGetUniformLocation(glslProgram.glId(), "uCamDir");
 
@@ -959,6 +956,26 @@ int ViewerApplication::run()
 	  GL_RGBA,
 	  GL_FLOAT,
 	  white);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+  GLuint greyTexture;
+  float grey[] = {0.5f, 0.5f, 0.5f, 1};
+  glGenTextures(1, &greyTexture);
+  glBindTexture(GL_TEXTURE_2D, greyTexture);
+  glTexImage2D(
+	  GL_TEXTURE_2D,
+	  0,
+	  GL_RGBA,
+	  1,
+	  1,
+	  0,
+	  GL_RGBA,
+	  GL_FLOAT,
+	  grey);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -1175,7 +1192,7 @@ int ViewerApplication::run()
 				else
 				{
 					glActiveTexture(GL_TEXTURE4);
-					glBindTexture(GL_TEXTURE_2D, whiteTexture);
+					glBindTexture(GL_TEXTURE_2D, greyTexture);
 					glUniform1f(normalScaleLocation, 1);
 				}
 
@@ -1245,7 +1262,7 @@ int ViewerApplication::run()
 		glUniform1f(occlusionStrengthLocation, 1);
 
 		glActiveTexture(GL_TEXTURE4);
-		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindTexture(GL_TEXTURE_2D, greyTexture);
 		glUniform1f(normalScaleLocation, 1);
 	};
 
@@ -1296,28 +1313,47 @@ int ViewerApplication::run()
 
 			if (node.mesh >= 0)
 			{
-				glm::mat4 modelViewMatrix = viewMatrix * modelMatrix;
-				glm::mat4 modelViewProjectionMatrix = projMatrix * modelViewMatrix;
-				glm::mat4 normalMatrix = glm::inverse(glm::transpose(modelViewMatrix));
-
+				glm::mat4 modelViewMatrix =
+					viewMatrix * modelMatrix;
+				glm::mat4 modelViewProjectionMatrix =
+					projMatrix * modelViewMatrix;
+				glm::mat4 normalMatrix =
+					glm::inverse(glm::transpose(modelViewMatrix));
 				glm::vec3 lightDirection;
 
 				if (lightFromCamera)
 				{
-					lightDirection = glm::vec3(0.0f, 0.0f, 1.0f);
+					lightDirection = glm::normalize(camera.getDirection());
 				}
 				else
 				{
-					lightDirection = glm::normalize(viewMatrix * glm::vec4(lightDirectionRaw, 0.0f));
+					lightDirection = glm::normalize(lightDirectionRaw);
 				}
 
-				glUniformMatrix4fv(modelMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelMatrix));
-				glUniformMatrix4fv(modelViewMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewMatrix));
-				glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE, glm::value_ptr(modelViewProjectionMatrix));
-				glUniformMatrix4fv(normalMatrixLocation, 1, GL_FALSE, glm::value_ptr(normalMatrix));
-
-				glUniform3fv(camPosLocation, 1, glm::value_ptr(camera.getPosition()));
-				glUniform3fv(camDirLocation, 1, glm::value_ptr(camera.getDirection()));
+				glUniformMatrix4fv(
+					modelMatrixLocation,
+					1,
+					GL_FALSE,
+					glm::value_ptr(modelMatrix));
+				glUniformMatrix4fv(
+					modelViewMatrixLocation,
+					1,
+					GL_FALSE,
+					glm::value_ptr(modelViewMatrix));
+				glUniformMatrix4fv(
+					modelViewProjMatrixLocation,
+					1,
+					GL_FALSE,
+					glm::value_ptr(modelViewProjectionMatrix));
+				glUniformMatrix4fv(
+					normalMatrixLocation,
+					1,
+					GL_FALSE,
+					glm::value_ptr(normalMatrix));
+				glUniform3fv(
+					camDirLocation,
+					1,
+					glm::value_ptr(camera.getDirection()));
 
 				if (lightDirectionLocation >= 0)
 				{

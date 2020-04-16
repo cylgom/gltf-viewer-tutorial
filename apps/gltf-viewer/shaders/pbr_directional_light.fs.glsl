@@ -1,7 +1,5 @@
 #version 330
 
-in vec3 vViewSpacePosition;
-in vec3 vViewSpaceNormal;
 in vec2 vTexCoords;
 in vec3 vWorldSpacePosition;
 in vec3 vWorldSpaceNormal;
@@ -28,8 +26,6 @@ uniform sampler2D uNormalTexture;
 uniform samplerCube uIrradianceMap;
 uniform samplerCube uPrefilterMap;
 uniform sampler2D uBrdfLUT;
-
-uniform vec3 uCamPos;
 uniform vec3 uCamDir;
 
 out vec3 fColor;
@@ -64,35 +60,30 @@ void main()
   vec4 normalSample =
 	  texture2D(uNormalTexture, vTexCoords);
   vec3 scaledNormal =
-	  normalize((normalSample.xyz * 2.0 - 1.0) * vec3(uNormalScale, uNormalScale, 1.0));
+	  (normalSample.xyz * 2.0 - 1.0)
+	  * vec3(uNormalScale, uNormalScale, 1.0);
 
   // tbn matrix
-  vec3 fragTgX = dFdx(vViewSpacePosition);
-  vec3 fragTgY = dFdy(vViewSpacePosition);
+  vec3 fragTgX = dFdx(vWorldSpacePosition);
+  vec3 fragTgY = dFdy(vWorldSpacePosition);
 
   vec2 texTgX = dFdx(vTexCoords);
   vec2 texTgY = dFdy(vTexCoords);
 
   vec3 t = normalize(texTgY.y * fragTgX - texTgX.y * fragTgX);
   vec3 b = normalize(texTgX.x * fragTgX - texTgX.x * fragTgY);
-  vec3 n = normalize(vViewSpaceNormal);
+  vec3 n = vWorldSpaceNormal;
 
-  t = normalize(cross(
-	  cross(n, t),
-	  n));
-
-  b = normalize(cross(
-	  n,
-	  cross(b, n)));
-
+  t = normalize(cross(cross(n, t),n));
+  b = normalize(cross(n, cross(b, n)));
   mat3 tbn = mat3(t, b, n);
 
   // constants
   vec3 dielectricSpecular = vec3(0.04, 0.04, 0.04);
   vec3 black = vec3(0, 0, 0);
-  vec3 N = normalize(scaledNormal);
-  vec3 L = tbn * uLightDirection;
-  vec3 V = tbn * normalize(-vViewSpacePosition);
+  vec3 L = uLightDirection;
+  vec3 N = normalize(tbn * scaledNormal + vWorldSpaceNormal);
+  vec3 V = normalize(uCamDir - vWorldSpacePosition);
   vec3 H = normalize(L+V);
 
   // dot products
@@ -108,19 +99,19 @@ void main()
 
   // emissive texture
   vec4 emSample =
-	  SRGBtoLINEAR(texture2D(uEmissiveTexture, vTexCoords));
+	SRGBtoLINEAR(texture2D(uEmissiveTexture, vTexCoords));
   vec3 emissive =
-	  emSample.rgb * uEmissiveFactor;
+	emSample.rgb * uEmissiveFactor;
 
   // occlusion texture
   vec4 ocSample =
-	  SRGBtoLINEAR(texture2D(uOcclusionTexture, vTexCoords));
+	SRGBtoLINEAR(texture2D(uOcclusionTexture, vTexCoords));
 
   // color texture
   vec4 baseColorFromTexture =
-	  SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords));
+	SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords));
   vec4 baseColor =
-	  baseColorFromTexture * uBaseColorFactor;
+	baseColorFromTexture * uBaseColorFactor;
 
   // alpha squared == roughness to the 4
   float a_sq =
@@ -148,34 +139,51 @@ void main()
   	Vis = 0.5 / Vis_denom;
   }
 
-  // V.H to the 5
+  // fresnel
+  vec3 F0 = mix(dielectricSpecular, baseColor.rgb, metallic);
+  vec3 diffuse =
+    mix(
+      baseColor.rgb * (1 - dielectricSpecular.r),
+      black,
+      metallic) * M_1_PI;
+
+  // regular point-light fresnel
   float VdotH_p5 = (1 - VdotH);
   VdotH_p5 *= VdotH_p5 * VdotH_p5 * VdotH_p5 * VdotH_p5;
-
-  // variables
-  vec3 F0 = mix(dielectricSpecular, baseColor.rgb, metallic);
-  // modified fresnel for irradiance accounting
-  vec3 F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * VdotH_p5;
   float D = a_sq * M_1_PI * pow((NdotH * NdotH) * (a_sq - 1) + 1, -2);
-  vec3 irradiance = texture(uIrradianceMap, N).rgb;
-  // IBL
-  const float MAX_REFLECTION_LOD = 4.0f;
-  vec3 R = reflect(normalize(vWorldSpacePosition - uCamDir), normalize(vWorldSpaceNormal));
-  vec3 prefilteredColor = textureLod(uPrefilterMap, R, roughness * MAX_REFLECTION_LOD).rgb;
-  vec2 envBRDF = texture(uBrdfLUT, vec2(VdotH, roughness)).rg;
-  vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
-
-  // diffuse
-  vec3 diffuse = mix(
-	  baseColor.rgb * (1 - dielectricSpecular.r),
-	  black,
-	  metallic) * M_1_PI * irradiance;
-
-  // components
+  vec3 F = F0 + (1 - F0) * VdotH_p5;
   vec3 f_diffuse = (1 - F) * diffuse;
-  vec3 f_specular = (F * Vis * D) + specular;
+  vec3 f_specular = (F * Vis * D);
+  vec3 unoc_color =
+	(f_diffuse + f_specular)
+	* uLightIntensity
+	* NdotL;
 
-  // done
-  vec3 unoc_color = (f_diffuse + f_specular) * uLightIntensity * NdotL;
-  fColor = LINEARtoSRGB(mix(unoc_color, unoc_color * ocSample.r, uOcclusionStrength) + emissive);
+  // modified fresnel for irradiance accounting
+  float NdotV_p5 = (1 - clamp(dot(N, V), 0, 1));
+  NdotV_p5 *= NdotV_p5 * NdotV_p5 * NdotV_p5 * NdotV_p5;
+  F = F0 + (max(vec3(1.0 - roughness), F0) - F0) * NdotV_p5;
+  vec3 irradiance = texture(uIrradianceMap, N).rgb;
+  vec3 R = reflect(-V, N);
+  vec3 prefilteredColor =
+    textureLod(
+	  uPrefilterMap,
+	  R,
+	  roughness * 4.0f).rgb;
+  vec2 envBRDF =
+    texture(
+      uBrdfLUT,
+	  vec2(VdotH, roughness)).rg;
+  vec3 specular =
+    prefilteredColor
+	* (F * envBRDF.x + envBRDF.y);
+  f_diffuse = (1 - F) * diffuse * irradiance;
+  f_specular = specular;
+  unoc_color += (f_diffuse + f_specular);
+
+  fColor =
+    LINEARtoSRGB(mix(
+	  unoc_color,
+	  unoc_color * ocSample.r,
+	  uOcclusionStrength) + emissive);
 }
