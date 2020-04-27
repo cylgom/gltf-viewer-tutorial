@@ -1223,11 +1223,11 @@ int ViewerApplication::run()
 				{
 					// irradiance map
 					glActiveTexture(GL_TEXTURE5);
-					glBindTexture(GL_TEXTURE_CUBE_MAP, whiteCube);
+					glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
 					// prefilter map
 					glActiveTexture(GL_TEXTURE6);
-					glBindTexture(GL_TEXTURE_CUBE_MAP, whiteCube);
+					glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
 					// brdf lut
 					glActiveTexture(GL_TEXTURE7);
